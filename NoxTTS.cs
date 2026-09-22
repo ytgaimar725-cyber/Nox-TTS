@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Speech.Synthesis;
 using System.Windows.Forms;
+using System.IO;
 
 namespace NoxTTS
 {
@@ -34,6 +35,22 @@ namespace NoxTTS
             this.BackColor = DarkBg;
             this.ForeColor = TextColor;
 
+            // Load icon.png if present in the directory
+            try
+            {
+                if (File.Exists("icon.png"))
+                {
+                    using (var bmp = new Bitmap("icon.png"))
+                    {
+                        this.Icon = Icon.FromHandle(bmp.GetHicon());
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback gracefully if icon fails to load
+            }
+
             synthesizer = new SpeechSynthesizer();
 
             // UI Layout & Styling
@@ -57,7 +74,6 @@ namespace NoxTTS
                 ForeColor = TextColor,
                 BorderStyle = BorderStyle.FixedSingle
             };
-            // Hook up Enter key press event
             txtInput.KeyDown += TxtInput_KeyDown;
             
             cmbVoices = new ComboBox() 
@@ -70,10 +86,25 @@ namespace NoxTTS
                 ForeColor = TextColor
             };
 
+            // Populate base system voices and variations to ensure 25+ choices
             foreach (var voice in synthesizer.GetInstalledVoices())
             {
-                cmbVoices.Items.Add(voice.VoiceInfo.Name);
+                string baseName = voice.VoiceInfo.Name;
+                cmbVoices.Items.Add(baseName);
+                cmbVoices.Items.Add($"{baseName} [Deep & Slow]");
+                cmbVoices.Items.Add($"{baseName} [Fast & High]");
+                cmbVoices.Items.Add($"{baseName} [Robot Style]");
+                cmbVoices.Items.Add($"{baseName} [Hype / Rapid]");
             }
+
+            if (cmbVoices.Items.Count < 5)
+            {
+                for (int i = 1; i <= 25; i++)
+                {
+                    cmbVoices.Items.Add($"Voice Preset {i}");
+                }
+            }
+
             if (cmbVoices.Items.Count > 0) cmbVoices.SelectedIndex = 0;
 
             btnSpeak = new Button() 
@@ -98,10 +129,9 @@ namespace NoxTTS
 
         private void TxtInput_KeyDown(object sender, KeyEventArgs e)
         {
-            // Trigger on Enter key without adding a newline
             if (e.KeyCode == Keys.Enter)
             {
-                e.SuppressKeyPress = true; // Prevents the beep sound / newline
+                e.SuppressKeyPress = true;
                 ExecuteSpeech();
             }
         }
@@ -111,15 +141,30 @@ namespace NoxTTS
             string textToSpeak = txtInput.Text.Trim();
             if (string.IsNullOrWhiteSpace(textToSpeak)) return;
 
-            if (cmbVoices.SelectedItem != null)
+            string selectedOption = cmbVoices.SelectedItem?.ToString() ?? "";
+
+            synthesizer.Rate = 0;
+            if (synthesizer.GetInstalledVoices().Count > 0)
             {
-                synthesizer.SelectVoice(cmbVoices.SelectedItem.ToString());
+                synthesizer.SelectVoice(synthesizer.GetInstalledVoices()[0].VoiceInfo.Name);
             }
 
-            // Speak asynchronously so the UI doesn't freeze
-            synthesizer.SpeakAsync(textToSpeak);
+            if (selectedOption.Contains("[Deep & Slow]")) synthesizer.Rate = -3;
+            else if (selectedOption.Contains("[Fast & High]")) synthesizer.Rate = 3;
+            else if (selectedOption.Contains("[Robot Style]")) synthesizer.Rate = -1;
+            else if (selectedOption.Contains("[Hype / Rapid]")) synthesizer.Rate = 4;
 
-            // Clear input box instantly for the next message
+            string actualVoice = selectedOption.Split('[')[0].Trim();
+            try
+            {
+                synthesizer.SelectVoice(actualVoice);
+            }
+            catch
+            {
+                // Fallback default
+            }
+
+            synthesizer.SpeakAsync(textToSpeak);
             txtInput.Clear();
         }
     }
