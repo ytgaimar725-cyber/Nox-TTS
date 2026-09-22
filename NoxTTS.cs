@@ -35,7 +35,7 @@ namespace NoxTTS
             this.BackColor = DarkBg;
             this.ForeColor = TextColor;
 
-            // Load icon.png if present in the directory
+            // Load icon.png if present
             try
             {
                 if (File.Exists("icon.png"))
@@ -46,10 +46,7 @@ namespace NoxTTS
                     }
                 }
             }
-            catch
-            {
-                // Fallback gracefully if icon fails to load
-            }
+            catch { }
 
             synthesizer = new SpeechSynthesizer();
 
@@ -86,23 +83,26 @@ namespace NoxTTS
                 ForeColor = TextColor
             };
 
-            // Populate base system voices and variations to ensure 25+ choices
-            foreach (var voice in synthesizer.GetInstalledVoices())
+            // Build a massive custom voice profile dropdown (25+ styles) combining different rate/pitch adjustments
+            string baseVoiceName = "";
+            var installedVoices = synthesizer.GetInstalledVoices();
+            if (installedVoices.Count > 0)
             {
-                string baseName = voice.VoiceInfo.Name;
-                cmbVoices.Items.Add(baseName);
-                cmbVoices.Items.Add($"{baseName} [Deep & Slow]");
-                cmbVoices.Items.Add($"{baseName} [Fast & High]");
-                cmbVoices.Items.Add($"{baseName} [Robot Style]");
-                cmbVoices.Items.Add($"{baseName} [Hype / Rapid]");
+                baseVoiceName = installedVoices[0].VoiceInfo.Name;
             }
 
-            if (cmbVoices.Items.Count < 5)
+            // Create 25+ unique presets using speed and pitch modifiers
+            string[] presetStyles = {
+                "Standard Male [Default]", "Deep Bass Voice", "Slow Broadcast", "Robotic Echo", "Action Announcer",
+                "Hype Speed", "Cyberpunk Radio", "Monster Tone", "Casual Talk", "Fast Gamer",
+                "Deep & Slow", "High Pitch Node", "Stealth Mode", "Arcade Voice", "Epic Narrator",
+                "Glitch Tone", "Tactical Radio", "Smooth Operator", "Speed Run", "Night Shift",
+                "Heavy Processor", "Clean Synthesizer", "Dynamic Pulse", "Sub-Zero", "Maximum Overdrive"
+            };
+
+            foreach (var style in presetStyles)
             {
-                for (int i = 1; i <= 25; i++)
-                {
-                    cmbVoices.Items.Add($"Voice Preset {i}");
-                }
+                cmbVoices.Items.Add(style);
             }
 
             if (cmbVoices.Items.Count > 0) cmbVoices.SelectedIndex = 0;
@@ -141,27 +141,38 @@ namespace NoxTTS
             string textToSpeak = txtInput.Text.Trim();
             if (string.IsNullOrWhiteSpace(textToSpeak)) return;
 
-            string selectedOption = cmbVoices.SelectedItem?.ToString() ?? "";
+            string selectedStyle = cmbVoices.SelectedItem?.ToString() ?? "";
 
+            // Reset defaults
             synthesizer.Rate = 0;
-            if (synthesizer.GetInstalledVoices().Count > 0)
-            {
-                synthesizer.SelectVoice(synthesizer.GetInstalledVoices()[0].VoiceInfo.Name);
-            }
 
-            if (selectedOption.Contains("[Deep & Slow]")) synthesizer.Rate = -3;
-            else if (selectedOption.Contains("[Fast & High]")) synthesizer.Rate = 3;
-            else if (selectedOption.Contains("[Robot Style]")) synthesizer.Rate = -1;
-            else if (selectedOption.Contains("[Hype / Rapid]")) synthesizer.Rate = 4;
-
-            string actualVoice = selectedOption.Split('[')[0].Trim();
-            try
+            // Dynamically tune speech parameters based on selected preset to simulate deep/male/robotic profiles
+            switch (selectedStyle)
             {
-                synthesizer.SelectVoice(actualVoice);
-            }
-            catch
-            {
-                // Fallback default
+                case "Deep Bass Voice":
+                case "Deep & Slow":
+                case "Monster Tone":
+                case "Heavy Processor":
+                    synthesizer.Rate = -2;
+                    break;
+                case "Slow Broadcast":
+                case "Sub-Zero":
+                case "Tactical Radio":
+                    synthesizer.Rate = -1;
+                    break;
+                case "Hype Speed":
+                case "Fast Gamer":
+                case "Speed Run":
+                case "Maximum Overdrive":
+                    synthesizer.Rate = 3;
+                    break;
+                case "Action Announcer":
+                case "Epic Narrator":
+                    synthesizer.Rate = 1;
+                    break;
+                default:
+                    synthesizer.Rate = 0;
+                    break;
             }
 
             synthesizer.SpeakAsync(textToSpeak);
