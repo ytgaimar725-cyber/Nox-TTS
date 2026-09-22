@@ -83,29 +83,21 @@ namespace NoxTTS
                 ForeColor = TextColor
             };
 
-            // Build a massive custom voice profile dropdown (25+ styles) combining different rate/pitch adjustments
-            string baseVoiceName = "";
-            var installedVoices = synthesizer.GetInstalledVoices();
-            if (installedVoices.Count > 0)
+            // Dynamically scan and load all installed Windows system voices (like Microsoft Andrew)
+            foreach (var voice in synthesizer.GetInstalledVoices())
             {
-                baseVoiceName = installedVoices[0].VoiceInfo.Name;
+                if (voice.Enabled)
+                {
+                    cmbVoices.Items.Add(voice.VoiceInfo.Name);
+                }
             }
 
-            // Create 25+ unique presets using speed and pitch modifiers
-            string[] presetStyles = {
-                "Standard Male [Default]", "Deep Bass Voice", "Slow Broadcast", "Robotic Echo", "Action Announcer",
-                "Hype Speed", "Cyberpunk Radio", "Monster Tone", "Casual Talk", "Fast Gamer",
-                "Deep & Slow", "High Pitch Node", "Stealth Mode", "Arcade Voice", "Epic Narrator",
-                "Glitch Tone", "Tactical Radio", "Smooth Operator", "Speed Run", "Night Shift",
-                "Heavy Processor", "Clean Synthesizer", "Dynamic Pulse", "Sub-Zero", "Maximum Overdrive"
-            };
-
-            foreach (var style in presetStyles)
+            if (cmbVoices.Items.Count == 0)
             {
-                cmbVoices.Items.Add(style);
+                cmbVoices.Items.Add("Default System Voice");
             }
 
-            if (cmbVoices.Items.Count > 0) cmbVoices.SelectedIndex = 0;
+            cmbVoices.SelectedIndex = 0;
 
             btnSpeak = new Button() 
             { 
@@ -141,40 +133,21 @@ namespace NoxTTS
             string textToSpeak = txtInput.Text.Trim();
             if (string.IsNullOrWhiteSpace(textToSpeak)) return;
 
-            string selectedStyle = cmbVoices.SelectedItem?.ToString() ?? "";
+            string selectedVoice = cmbVoices.SelectedItem?.ToString() ?? "";
 
-            // Reset defaults
-            synthesizer.Rate = 0;
-
-            // Dynamically tune speech parameters based on selected preset to simulate deep/male/robotic profiles
-            switch (selectedStyle)
+            try
             {
-                case "Deep Bass Voice":
-                case "Deep & Slow":
-                case "Monster Tone":
-                case "Heavy Processor":
-                    synthesizer.Rate = -2;
-                    break;
-                case "Slow Broadcast":
-                case "Sub-Zero":
-                case "Tactical Radio":
-                    synthesizer.Rate = -1;
-                    break;
-                case "Hype Speed":
-                case "Fast Gamer":
-                case "Speed Run":
-                case "Maximum Overdrive":
-                    synthesizer.Rate = 3;
-                    break;
-                case "Action Announcer":
-                case "Epic Narrator":
-                    synthesizer.Rate = 1;
-                    break;
-                default:
-                    synthesizer.Rate = 0;
-                    break;
+                if (selectedVoice != "Default System Voice")
+                {
+                    synthesizer.SelectVoice(selectedVoice);
+                }
+            }
+            catch 
+            {
+                // Fallback silently if selection fails
             }
 
+            synthesizer.Rate = 0;
             synthesizer.SpeakAsync(textToSpeak);
             txtInput.Clear();
         }
