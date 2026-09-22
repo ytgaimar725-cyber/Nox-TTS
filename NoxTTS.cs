@@ -18,11 +18,14 @@ namespace NoxTTS
         private Label lblVolumeValue;
         private Button btnSpeak;
 
-        // Dark Theme Color Palette
-        private readonly Color DarkBg = Color.FromArgb(30, 30, 30);
-        private readonly Color PanelBg = Color.FromArgb(45, 45, 48);
-        private readonly Color TextColor = Color.FromArgb(220, 220, 220);
-        private readonly Color AccentColor = Color.FromArgb(0, 122, 204);
+        // Modern Midnight Neon Palette
+        private readonly Color BgColor = Color.FromArgb(18, 18, 20);          // Deep dark base
+        private readonly Color PanelColor = Color.FromArgb(30, 30, 35);       // Soft surface container
+        private readonly Color BorderColor = Color.FromArgb(50, 50, 60);     // Subtle borders
+        private readonly Color TextPrimary = Color.FromArgb(240, 240, 245);  // Crisp white/silver
+        private readonly Color TextMuted = Color.FromArgb(160, 160, 175);    // Soft labels
+        private readonly Color AccentCyan = Color.FromArgb(0, 229, 255);     // Neon Cyan Accent
+        private readonly Color AccentHover = Color.FromArgb(30, 240, 255);   // Lighter cyan for hover
 
         [STAThread]
         public static void Main()
@@ -34,11 +37,13 @@ namespace NoxTTS
 
         public MainForm()
         {
-            this.Text = "Nox TTS - Virtual Cable Bridge";
-            this.Size = new Size(460, 375);
+            this.Text = "NoxTTS — Voice Bridge";
+            this.Size = new Size(480, 395);
             this.StartPosition = FormStartPosition.CenterScreen;
-            this.BackColor = DarkBg;
-            this.ForeColor = TextColor;
+            this.BackColor = BgColor;
+            this.ForeColor = TextPrimary;
+            this.FormBorderStyle = FormBorderStyle.FixedSingle;
+            this.MaximizeBox = false;
 
             // Load custom app icon if present
             try
@@ -55,53 +60,107 @@ namespace NoxTTS
 
             synthesizer = new SpeechSynthesizer();
 
-            // UI Layout & Styling
-            Label lblText = new Label() 
-            { 
-                Text = "Type message and press Enter:", 
-                Left = 20, Top = 20, Width = 400, ForeColor = TextColor 
-            };
+            // --- UI Components ---
             
+            Label lblHeader = new Label() 
+            { 
+                Text = "TEXT TO SPEECH BRIDGE", 
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                Left = 24, Top = 20, Width = 400, Height = 18, 
+                ForeColor = AccentCyan 
+            };
+
             txtInput = new TextBox() 
             { 
-                Left = 20, Top = 45, Width = 400, Height = 60, 
-                Multiline = true, BackColor = PanelBg, ForeColor = TextColor, BorderStyle = BorderStyle.FixedSingle
+                Left = 24, Top = 45, Width = 416, Height = 70, 
+                Multiline = true, 
+                BackColor = PanelColor, 
+                ForeColor = TextPrimary, 
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("Segoe UI", 10.5F, FontStyle.Regular)
             };
             txtInput.KeyDown += TxtInput_KeyDown;
 
-            Label lblVoice = new Label() { Text = "Voice:", Left = 20, Top = 115, Width = 190, ForeColor = TextColor };
+            Label lblVoice = new Label() 
+            { 
+                Text = "Voice Model", 
+                Font = new Font("Segoe UI", 9F, FontStyle.Regular),
+                Left = 24, Top = 130, Width = 196, 
+                ForeColor = TextMuted 
+            };
+            
             cmbVoices = new ComboBox() 
             { 
-                Left = 20, Top = 135, Width = 190, 
-                DropDownStyle = ComboBoxStyle.DropDownList, BackColor = PanelBg, ForeColor = TextColor
+                Left = 24, Top = 152, Width = 196, Height = 25, 
+                DropDownStyle = ComboBoxStyle.DropDownList, 
+                BackColor = PanelColor, 
+                ForeColor = TextPrimary,
+                Font = new Font("Segoe UI", 9.5F)
             };
 
-            Label lblDevice = new Label() { Text = "Output Device (Cable):", Left = 230, Top = 115, Width = 190, ForeColor = TextColor };
+            Label lblDevice = new Label() 
+            { 
+                Text = "Virtual Audio Output", 
+                Font = new Font("Segoe UI", 9F, FontStyle.Regular),
+                Left = 244, Top = 130, Width = 196, 
+                ForeColor = TextMuted 
+            };
+            
             cmbDevices = new ComboBox() 
             { 
-                Left = 230, Top = 135, Width = 190, 
-                DropDownStyle = ComboBoxStyle.DropDownList, BackColor = PanelBg, ForeColor = TextColor
+                Left = 244, Top = 152, Width = 196, Height = 25, 
+                DropDownStyle = ComboBoxStyle.DropDownList, 
+                BackColor = PanelColor, 
+                ForeColor = TextPrimary,
+                Font = new Font("Segoe UI", 9.5F)
             };
 
-            Label lblVolume = new Label() { Text = "Volume:", Left = 20, Top = 175, Width = 60, ForeColor = TextColor };
+            Label lblVolume = new Label() 
+            { 
+                Text = "Volume", 
+                Font = new Font("Segoe UI", 9F, FontStyle.Regular),
+                Left = 24, Top = 198, Width = 60, 
+                ForeColor = TextMuted 
+            };
+            
             trackVolume = new TrackBar()
             {
-                Left = 80, Top = 170, Width = 300, Height = 45,
+                Left = 80, Top = 192, Width = 330, Height = 40,
                 Minimum = 0, Maximum = 100, Value = 100,
-                TickFrequency = 10
+                TickFrequency = 10,
+                BackColor = BgColor
             };
-            lblVolumeValue = new Label() { Text = "100%", Left = 385, Top = 175, Width = 40, ForeColor = TextColor };
             
+            lblVolumeValue = new Label() 
+            { 
+                Text = "100%", 
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                Left = 412, Top = 198, Width = 40, 
+                ForeColor = AccentCyan 
+            };
+
             trackVolume.Scroll += (s, e) =>
             {
                 lblVolumeValue.Text = trackVolume.Value + "%";
             };
 
-            // Load Installed System Voices
+            // Load Installed System Voices (Filtered strictly for Male voices with clean fallback)
             foreach (var voice in synthesizer.GetInstalledVoices())
             {
-                if (voice.Enabled) cmbVoices.Items.Add(voice.VoiceInfo.Name);
+                if (voice.Enabled && voice.VoiceInfo.Gender == VoiceGender.Male)
+                {
+                    cmbVoices.Items.Add(voice.VoiceInfo.Name);
+                }
             }
+
+            if (cmbVoices.Items.Count == 0)
+            {
+                foreach (var voice in synthesizer.GetInstalledVoices())
+                {
+                    if (voice.Enabled) cmbVoices.Items.Add(voice.VoiceInfo.Name);
+                }
+            }
+
             if (cmbVoices.Items.Count == 0) cmbVoices.Items.Add("Default System Voice");
             cmbVoices.SelectedIndex = 0;
 
@@ -117,16 +176,33 @@ namespace NoxTTS
             }
             if (cmbDevices.SelectedIndex == -1 && cmbDevices.Items.Count > 0) cmbDevices.SelectedIndex = 0;
 
+            // Modern Flat Accent Button with Interactive Hover Effect
             btnSpeak = new Button() 
             { 
-                Text = "Speak to Cable", 
-                Left = 20, Top = 230, Width = 400, Height = 35,
-                BackColor = AccentColor, ForeColor = Color.White, FlatStyle = FlatStyle.Flat
+                Text = "BROADCAST TO CABLE", 
+                Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
+                Left = 24, Top = 255, Width = 416, Height = 42,
+                BackColor = AccentCyan, 
+                ForeColor = Color.FromArgb(18, 18, 20), 
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand
             };
             btnSpeak.FlatAppearance.BorderSize = 0;
+            btnSpeak.MouseEnter += (s, e) => btnSpeak.BackColor = AccentHover;
+            btnSpeak.MouseLeave += (s, e) => btnSpeak.BackColor = AccentCyan;
             btnSpeak.Click += (s, e) => ExecuteSpeech();
 
-            this.Controls.Add(lblText);
+            Label lblHint = new Label()
+            {
+                Text = "Tip: Press Enter in the text box to speak instantly.",
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Italic),
+                Left = 24, Top = 310, Width = 416,
+                ForeColor = Color.FromArgb(110, 110, 125),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+
+            // Add all controls to form
+            this.Controls.Add(lblHeader);
             this.Controls.Add(txtInput);
             this.Controls.Add(lblVoice);
             this.Controls.Add(cmbVoices);
@@ -136,6 +212,7 @@ namespace NoxTTS
             this.Controls.Add(trackVolume);
             this.Controls.Add(lblVolumeValue);
             this.Controls.Add(btnSpeak);
+            this.Controls.Add(lblHint);
         }
 
         private void TxtInput_KeyDown(object sender, KeyEventArgs e)
@@ -154,7 +231,7 @@ namespace NoxTTS
 
             string selectedVoice = cmbVoices.SelectedItem?.ToString() ?? "";
             int selectedDeviceIndex = cmbDevices.SelectedIndex;
-            float volumeLevel = trackVolume.Value / 100f; // Convert 0-100 to 0.0-1.0 float
+            float volumeLevel = trackVolume.Value / 100f;
 
             try
             {
@@ -170,7 +247,6 @@ namespace NoxTTS
                 stream.Position = 0;
                 using (var reader = new RawSourceWaveStream(stream, new WaveFormat(16000, 16, 1)))
                 {
-                    // Wrap with VolumeSampleProvider to adjust volume cleanly
                     var volumeProvider = new VolumeSampleProvider(reader.ToSampleProvider())
                     {
                         Volume = volumeLevel
@@ -190,7 +266,7 @@ namespace NoxTTS
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error: " + ex.Message);
+                MessageBox.Show("Error: " + ex.Message, "NoxTTS Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
             txtInput.Clear();
