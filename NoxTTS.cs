@@ -1,8 +1,9 @@
 using System;
 using System.Drawing;
+using System.IO;
 using System.Speech.Synthesis;
 using System.Windows.Forms;
-using System.IO;
+using NAudio.Wave;
 
 namespace NoxTTS
 {
@@ -11,6 +12,7 @@ namespace NoxTTS
         private SpeechSynthesizer synthesizer;
         private TextBox txtInput;
         private ComboBox cmbVoices;
+        private ComboBox cmbDevices;
         private Button btnSpeak;
 
         // Dark Theme Color Palette
@@ -30,12 +32,12 @@ namespace NoxTTS
         public MainForm()
         {
             this.Text = "Nox TTS - Virtual Cable Bridge";
-            this.Size = new Size(460, 260);
+            this.Size = new Size(460, 310);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = DarkBg;
             this.ForeColor = TextColor;
 
-            // Load icon.png if present
+            // Load custom app icon if present in the folder
             try
             {
                 if (File.Exists("icon.png"))
@@ -54,68 +56,65 @@ namespace NoxTTS
             Label lblText = new Label() 
             { 
                 Text = "Type message and press Enter:", 
-                Left = 20, 
-                Top = 20, 
-                Width = 400, 
-                ForeColor = TextColor 
+                Left = 20, Top = 20, Width = 400, ForeColor = TextColor 
             };
             
             txtInput = new TextBox() 
             { 
-                Left = 20, 
-                Top = 45, 
-                Width = 400, 
-                Height = 60, 
-                Multiline = true,
-                BackColor = PanelBg,
-                ForeColor = TextColor,
-                BorderStyle = BorderStyle.FixedSingle
+                Left = 20, Top = 45, Width = 400, Height = 60, 
+                Multiline = true, BackColor = PanelBg, ForeColor = TextColor, BorderStyle = BorderStyle.FixedSingle
             };
             txtInput.KeyDown += TxtInput_KeyDown;
-            
+
+            Label lblVoice = new Label() { Text = "Voice:", Left = 20, Top = 115, Width = 190, ForeColor = TextColor };
             cmbVoices = new ComboBox() 
             { 
-                Left = 20, 
-                Top = 120, 
-                Width = 230, 
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                BackColor = PanelBg,
-                ForeColor = TextColor
+                Left = 20, Top = 135, Width = 190, 
+                DropDownStyle = ComboBoxStyle.DropDownList, BackColor = PanelBg, ForeColor = TextColor
             };
 
-            // Dynamically scan and load all installed Windows system voices (like Microsoft Andrew)
+            Label lblDevice = new Label() { Text = "Output Device (Cable):", Left = 230, Top = 115, Width = 190, ForeColor = TextColor };
+            cmbDevices = new ComboBox() 
+            { 
+                Left = 230, Top = 135, Width = 190, 
+                DropDownStyle = ComboBoxStyle.DropDownList, BackColor = PanelBg, ForeColor = TextColor
+            };
+
+            // Load Installed System Voices (e.g., Microsoft Andrew)
             foreach (var voice in synthesizer.GetInstalledVoices())
             {
-                if (voice.Enabled)
+                if (voice.Enabled) cmbVoices.Items.Add(voice.VoiceInfo.Name);
+            }
+            if (cmbVoices.Items.Count == 0) cmbVoices.Items.Add("Default System Voice");
+            cmbVoices.SelectedIndex = 0;
+
+            // Load Wave Output Devices and auto-select VB-Cable Input
+            for (int i = 0; i < WaveOut.DeviceCount; i++)
+            {
+                var caps = WaveOut.GetCapabilities(i);
+                cmbDevices.Items.Add(caps.ProductName);
+                if (caps.ProductName.Contains("CABLE Input", StringComparison.OrdinalIgnoreCase))
                 {
-                    cmbVoices.Items.Add(voice.VoiceInfo.Name);
+                    cmbDevices.SelectedIndex = i;
                 }
             }
-
-            if (cmbVoices.Items.Count == 0)
-            {
-                cmbVoices.Items.Add("Default System Voice");
-            }
-
-            cmbVoices.SelectedIndex = 0;
+            if (cmbDevices.SelectedIndex == -1 && cmbDevices.Items.Count > 0) cmbDevices.SelectedIndex = 0;
 
             btnSpeak = new Button() 
             { 
-                Text = "Speak", 
-                Left = 260, 
-                Top = 119, 
-                Width = 160, 
-                Height = 30,
-                BackColor = AccentColor,
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat
+                Text = "Speak to Cable", 
+                Left = 20, Top = 180, Width = 400, Height = 35,
+                BackColor = AccentColor, ForeColor = Color.White, FlatStyle = FlatStyle.Flat
             };
             btnSpeak.FlatAppearance.BorderSize = 0;
             btnSpeak.Click += (s, e) => ExecuteSpeech();
 
             this.Controls.Add(lblText);
             this.Controls.Add(txtInput);
+            this.Controls.Add(lblVoice);
             this.Controls.Add(cmbVoices);
+            this.Controls.Add(lblDevice);
+            this.Controls.Add(cmbDevices);
             this.Controls.Add(btnSpeak);
         }
 
@@ -134,21 +133,39 @@ namespace NoxTTS
             if (string.IsNullOrWhiteSpace(textToSpeak)) return;
 
             string selectedVoice = cmbVoices.SelectedItem?.ToString() ?? "";
+            int selectedDeviceIndex = cmbDevices.SelectedIndex;
 
             try
             {
-                if (selectedVoice != "Default System Voice")
+                if (!string.IsNullOrEmpty(selectedVoice) && selectedVoice != "Default System Voice")
                 {
                     synthesizer.SelectVoice(selectedVoice);
                 }
+
+                MemoryStream stream = new MemoryStream();
+                synthesizer.SetOutputToAudioStream(stream, new System.Speech.AudioFormat.SpeechAudioFormatInfo(16000, System.Speech.AudioFormat.AudioBitsPerSample.Sixteen, System.Speech.AudioFormat.AudioChannel.Mono));
+                synthesizer.Speak(textToSpeak);
+
+                stream.Position = 0;
+                using (var reader = new RawSourceWaveStream(stream, new WaveFormat(16000, 16, 1)))
+                {
+                    using (var waveOut = new WaveOutEvent())
+                    {
+                        waveOut.DeviceNumber = selectedDeviceIndex;
+                        waveOut.Init(reader);
+                        waveOut.Play();
+                        while (waveOut.PlaybackState == PlaybackState.Playing)
+                        {
+                            System.Threading.Thread.Sleep(50);
+                        }
+                    }
+                }
             }
-            catch 
+            catch (Exception ex)
             {
-                // Fallback silently if selection fails
+                MessageBox.Show("Error: " + ex.Message);
             }
 
-            synthesizer.Rate = 0;
-            synthesizer.SpeakAsync(textToSpeak);
             txtInput.Clear();
         }
     }
