@@ -4,6 +4,7 @@ using System.IO;
 using System.Speech.Synthesis;
 using System.Windows.Forms;
 using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 
 namespace NoxTTS
 {
@@ -13,6 +14,8 @@ namespace NoxTTS
         private TextBox txtInput;
         private ComboBox cmbVoices;
         private ComboBox cmbDevices;
+        private TrackBar trackVolume;
+        private Label lblVolumeValue;
         private Button btnSpeak;
 
         // Dark Theme Color Palette
@@ -32,12 +35,12 @@ namespace NoxTTS
         public MainForm()
         {
             this.Text = "Nox TTS - Virtual Cable Bridge";
-            this.Size = new Size(460, 310);
+            this.Size = new Size(460, 375);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = DarkBg;
             this.ForeColor = TextColor;
 
-            // Load custom app icon if present in the folder
+            // Load custom app icon if present
             try
             {
                 if (File.Exists("icon.png"))
@@ -80,7 +83,21 @@ namespace NoxTTS
                 DropDownStyle = ComboBoxStyle.DropDownList, BackColor = PanelBg, ForeColor = TextColor
             };
 
-            // Load Installed System Voices (e.g., Microsoft Andrew)
+            Label lblVolume = new Label() { Text = "Volume:", Left = 20, Top = 175, Width = 60, ForeColor = TextColor };
+            trackVolume = new TrackBar()
+            {
+                Left = 80, Top = 170, Width = 300, Height = 45,
+                Minimum = 0, Maximum = 100, Value = 100,
+                TickFrequency = 10
+            };
+            lblVolumeValue = new Label() { Text = "100%", Left = 385, Top = 175, Width = 40, ForeColor = TextColor };
+            
+            trackVolume.Scroll += (s, e) =>
+            {
+                lblVolumeValue.Text = trackVolume.Value + "%";
+            };
+
+            // Load Installed System Voices
             foreach (var voice in synthesizer.GetInstalledVoices())
             {
                 if (voice.Enabled) cmbVoices.Items.Add(voice.VoiceInfo.Name);
@@ -103,7 +120,7 @@ namespace NoxTTS
             btnSpeak = new Button() 
             { 
                 Text = "Speak to Cable", 
-                Left = 20, Top = 180, Width = 400, Height = 35,
+                Left = 20, Top = 230, Width = 400, Height = 35,
                 BackColor = AccentColor, ForeColor = Color.White, FlatStyle = FlatStyle.Flat
             };
             btnSpeak.FlatAppearance.BorderSize = 0;
@@ -115,6 +132,9 @@ namespace NoxTTS
             this.Controls.Add(cmbVoices);
             this.Controls.Add(lblDevice);
             this.Controls.Add(cmbDevices);
+            this.Controls.Add(lblVolume);
+            this.Controls.Add(trackVolume);
+            this.Controls.Add(lblVolumeValue);
             this.Controls.Add(btnSpeak);
         }
 
@@ -134,6 +154,7 @@ namespace NoxTTS
 
             string selectedVoice = cmbVoices.SelectedItem?.ToString() ?? "";
             int selectedDeviceIndex = cmbDevices.SelectedIndex;
+            float volumeLevel = trackVolume.Value / 100f; // Convert 0-100 to 0.0-1.0 float
 
             try
             {
@@ -149,10 +170,16 @@ namespace NoxTTS
                 stream.Position = 0;
                 using (var reader = new RawSourceWaveStream(stream, new WaveFormat(16000, 16, 1)))
                 {
+                    // Wrap with VolumeSampleProvider to adjust volume cleanly
+                    var volumeProvider = new VolumeSampleProvider(reader.ToSampleProvider())
+                    {
+                        Volume = volumeLevel
+                    };
+
                     using (var waveOut = new WaveOutEvent())
                     {
                         waveOut.DeviceNumber = selectedDeviceIndex;
-                        waveOut.Init(reader);
+                        waveOut.Init(volumeProvider);
                         waveOut.Play();
                         while (waveOut.PlaybackState == PlaybackState.Playing)
                         {
