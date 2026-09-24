@@ -5,7 +5,6 @@ using System.Runtime.InteropServices;
 using System.Security;
 using System.Speech.Synthesis;
 using System.Windows.Forms;
-using Microsoft.Win32;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
@@ -188,7 +187,37 @@ namespace NoxTTS
             cmbPitch.Items.AddRange(new string[] { "Default", "Extra Low", "Low", "Medium", "High", "Extra High" });
             cmbPitch.SelectedIndex = 0;
 
-            LoadAllSystemVoices();
+            // Load exact system voices like your working version
+            try
+            {
+                foreach (var voice in synthesizer.GetInstalledVoices())
+                {
+                    if (voice.Enabled)
+                    {
+                        cmbVoices.Items.Add(voice.VoiceInfo.Name);
+                    }
+                }
+            }
+            catch { }
+
+            if (cmbVoices.Items.Count > 0)
+            {
+                cmbVoices.SelectedIndex = 0;
+                // Auto-select Andrew if present
+                for (int i = 0; i < cmbVoices.Items.Count; i++)
+                {
+                    if (cmbVoices.Items[i].ToString()!.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
+                    {
+                        cmbVoices.SelectedIndex = i;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                cmbVoices.Items.Add("Default System Voice");
+                cmbVoices.SelectedIndex = 0;
+            }
 
             for (int i = 0; i < WaveOut.DeviceCount; i++)
             {
@@ -243,67 +272,6 @@ namespace NoxTTS
             this.Controls.Add(lblHint);
         }
 
-        private void LoadAllSystemVoices()
-        {
-            try
-            {
-                foreach (var voice in synthesizer.GetInstalledVoices())
-                {
-                    if (voice.Enabled)
-                    {
-                        string name = voice.VoiceInfo.Name;
-                        if (!cmbVoices.Items.Contains(name))
-                        {
-                            cmbVoices.Items.Add(name);
-                        }
-                    }
-                }
-            }
-            catch { }
-
-            try
-            {
-                using (RegistryKey? baseKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens"))
-                {
-                    if (baseKey != null)
-                    {
-                        foreach (string subKeyName in baseKey.GetSubKeyNames())
-                        {
-                            string formattedName = $"{subKeyName} - English (United States)";
-                            if (subKeyName.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
-                            {
-                                formattedName = "Microsoft Andrew (Natural HD) - English (United States)";
-                            }
-
-                            if (!cmbVoices.Items.Contains(formattedName))
-                            {
-                                cmbVoices.Items.Add(formattedName);
-                            }
-                        }
-                    }
-                }
-            }
-            catch { }
-
-            if (cmbVoices.Items.Count > 0)
-            {
-                cmbVoices.SelectedIndex = 0;
-                for (int i = 0; i < cmbVoices.Items.Count; i++)
-                {
-                    if (cmbVoices.Items[i].ToString()!.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
-                    {
-                        cmbVoices.SelectedIndex = i;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                cmbVoices.Items.Add("Default System Voice");
-                cmbVoices.SelectedIndex = 0;
-            }
-        }
-
         private void TxtInput_KeyDown(object? sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)
@@ -326,32 +294,17 @@ namespace NoxTTS
 
             try
             {
-                // Apply speed rate (-10 to 10)
                 synthesizer.Rate = speedRate;
 
                 if (!string.IsNullOrEmpty(selectedVoice) && selectedVoice != "Default System Voice")
                 {
-                    try 
-                    { 
-                        if (selectedVoice.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
-                        {
-                            synthesizer.SelectVoiceByHints(VoiceGender.Male, VoiceAge.Adult, 0, System.Globalization.CultureInfo.GetCultureInfo("en-US"));
-                        }
-                        else
-                        {
-                            synthesizer.SelectVoice(selectedVoice.Split('-')[0].Trim()); 
-                        }
-                    } 
-                    catch 
-                    {
-                        synthesizer.SelectVoice(selectedVoice);
-                    }
+                    // Directly pass the exact token name just like your working version
+                    synthesizer.SelectVoice(selectedVoice);
                 }
 
                 MemoryStream stream = new MemoryStream();
                 synthesizer.SetOutputToAudioStream(stream, new System.Speech.AudioFormat.SpeechAudioFormatInfo(16000, System.Speech.AudioFormat.AudioBitsPerSample.Sixteen, System.Speech.AudioFormat.AudioChannel.Mono));
                 
-                // Handle Pitch via SSML PromptBuilder if custom pitch is selected
                 if (pitchSelection == "Default")
                 {
                     synthesizer.Speak(textToSpeak);
