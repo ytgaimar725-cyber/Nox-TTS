@@ -2,6 +2,8 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security;
+using System.Speech.Synthesis;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using NAudio.Wave;
@@ -11,11 +13,15 @@ namespace NoxTTS
 {
     public partial class MainForm : Form
     {
+        private SpeechSynthesizer synthesizer;
         private TextBox txtInput;
         private ComboBox cmbVoices;
         private ComboBox cmbDevices;
+        private ComboBox cmbPitch;
         private TrackBar trackVolume;
+        private TrackBar trackRate;
         private Label lblVolumeValue;
+        private Label lblRateValue;
         private Button btnSpeak;
         
         [DllImport("user32.dll")]
@@ -45,7 +51,7 @@ namespace NoxTTS
         public MainForm()
         {
             this.Text = "NoxTTS";
-            this.Size = new Size(460, 410);
+            this.Size = new Size(460, 480);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = BgColor;
             this.ForeColor = TextPrimary;
@@ -59,12 +65,13 @@ namespace NoxTTS
                 {
                     using (var bmp = new Bitmap("icon.png"))
                     {
-                        IntPtr hIcon = bmp.GetHicon();
-                        this.Icon = Icon.FromHandle(hIcon);
+                        this.Icon = Icon.FromHandle(bmp.GetHicon());
                     }
                 }
             }
             catch { }
+
+            synthesizer = new SpeechSynthesizer();
 
             this.Paint += (s, e) => {
                 using (Pen whitePen = new Pen(OutlineWhite, 1.5f))
@@ -113,7 +120,7 @@ namespace NoxTTS
 
             txtInput = new TextBox() 
             { 
-                Left = 20, Top = 48, Width = 420, Height = 75, 
+                Left = 20, Top = 48, Width = 420, Height = 65, 
                 Multiline = true, 
                 BackColor = PanelColor, 
                 ForeColor = TextPrimary, 
@@ -126,13 +133,13 @@ namespace NoxTTS
             { 
                 Text = "Voice Model Slot", 
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Regular),
-                Left = 20, Top = 140, Width = 196, 
+                Left = 20, Top = 122, Width = 196, 
                 ForeColor = TextMuted 
             };
             
             cmbVoices = new ComboBox() 
             { 
-                Left = 20, Top = 160, Width = 200, Height = 28, 
+                Left = 20, Top = 140, Width = 200, Height = 28, 
                 DropDownStyle = ComboBoxStyle.DropDownList, 
                 BackColor = PanelColor, 
                 ForeColor = TextPrimary,
@@ -143,48 +150,45 @@ namespace NoxTTS
             { 
                 Text = "Virtual Audio Cable Slot", 
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Regular),
-                Left = 240, Top = 140, Width = 196, 
+                Left = 240, Top = 122, Width = 196, 
                 ForeColor = TextMuted 
             };
             
             cmbDevices = new ComboBox() 
             { 
-                Left = 240, Top = 160, Width = 200, Height = 28, 
+                Left = 240, Top = 140, Width = 200, Height = 28, 
                 DropDownStyle = ComboBoxStyle.DropDownList, 
                 BackColor = PanelColor, 
                 ForeColor = TextPrimary,
                 Font = new Font("Segoe UI", 9.5F)
             };
 
-            Label lblVolume = new Label() 
-            { 
-                Text = "Volume Output", 
-                Font = new Font("Segoe UI", 8.5F, FontStyle.Regular),
-                Left = 20, Top = 205, Width = 90, 
-                ForeColor = TextMuted 
-            };
-            
-            trackVolume = new TrackBar()
+            // Volume Control
+            Label lblVolume = new Label() { Text = "Volume", Font = new Font("Segoe UI", 8.5F), Left = 20, Top = 183, Width = 70, ForeColor = TextMuted };
+            trackVolume = new TrackBar() { Left = 95, Top = 178, Width = 305, Height = 30, Minimum = 0, Maximum = 100, Value = 100, TickFrequency = 10, BackColor = BgColor };
+            lblVolumeValue = new Label() { Text = "100%", Font = new Font("Segoe UI", 8.5F, FontStyle.Bold), Left = 405, Top = 183, Width = 40, ForeColor = AccentCyan };
+            trackVolume.Scroll += (s, e) => { lblVolumeValue.Text = trackVolume.Value + "%"; };
+
+            // Speed (Rate) Control (-10 to 10)
+            Label lblRate = new Label() { Text = "Speed", Font = new Font("Segoe UI", 8.5F), Left = 20, Top = 222, Width = 70, ForeColor = TextMuted };
+            trackRate = new TrackBar() { Left = 95, Top = 217, Width = 305, Height = 30, Minimum = -10, Maximum = 10, Value = 0, TickFrequency = 2, BackColor = BgColor };
+            lblRateValue = new Label() { Text = "0", Font = new Font("Segoe UI", 8.5F, FontStyle.Bold), Left = 405, Top = 222, Width = 40, ForeColor = AccentCyan };
+            trackRate.Scroll += (s, e) => { lblRateValue.Text = trackRate.Value.ToString(); };
+
+            // Pitch Control Selector
+            Label lblPitch = new Label() { Text = "Voice Pitch", Font = new Font("Segoe UI", 8.5F), Left = 20, Top = 262, Width = 90, ForeColor = TextMuted };
+            cmbPitch = new ComboBox()
             {
-                Left = 110, Top = 198, Width = 290, Height = 35,
-                Minimum = 0, Maximum = 100, Value = 100,
-                TickFrequency = 10,
-                BackColor = BgColor
+                Left = 115, Top = 258, Width = 325, Height = 28,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor = PanelColor,
+                ForeColor = TextPrimary,
+                Font = new Font("Segoe UI", 9.5F)
             };
-            
-            lblVolumeValue = new Label() 
-            { 
-                Text = "100%", 
-                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
-                Left = 405, Top = 205, Width = 40, 
-                ForeColor = AccentCyan 
-            };
+            cmbPitch.Items.AddRange(new string[] { "Default", "Extra Low", "Low", "Medium", "High", "Extra High" });
+            cmbPitch.SelectedIndex = 0;
 
-            trackVolume.Scroll += (s, e) => {
-                lblVolumeValue.Text = trackVolume.Value + "%";
-            };
-
-            LoadSapiVoices();
+            LoadAllSystemVoices();
 
             for (int i = 0; i < WaveOut.DeviceCount; i++)
             {
@@ -201,7 +205,7 @@ namespace NoxTTS
             { 
                 Text = "BROADCAST TO CABLE", 
                 Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
-                Left = 20, Top = 268, Width = 420, Height = 42,
+                Left = 20, Top = 318, Width = 420, Height = 42,
                 BackColor = AccentCyan, 
                 ForeColor = Color.FromArgb(14, 14, 17), 
                 FlatStyle = FlatStyle.Flat,
@@ -216,7 +220,7 @@ namespace NoxTTS
             {
                 Text = "Tip: Press Enter in the text box to broadcast immediately.",
                 Font = new Font("Segoe UI", 8.25F, FontStyle.Italic),
-                Left = 20, Top = 330, Width = 420,
+                Left = 20, Top = 380, Width = 420,
                 ForeColor = Color.FromArgb(110, 110, 125),
                 TextAlign = ContentAlignment.MiddleCenter
             };
@@ -230,41 +234,27 @@ namespace NoxTTS
             this.Controls.Add(lblVolume);
             this.Controls.Add(trackVolume);
             this.Controls.Add(lblVolumeValue);
+            this.Controls.Add(lblRate);
+            this.Controls.Add(trackRate);
+            this.Controls.Add(lblRateValue);
+            this.Controls.Add(lblPitch);
+            this.Controls.Add(cmbPitch);
             this.Controls.Add(btnSpeak);
             this.Controls.Add(lblHint);
         }
 
-        private void LoadSapiVoices()
+        private void LoadAllSystemVoices()
         {
             try
             {
-                // Expose OneCore Natural voices (like Andrew) to standard SAPI enumeration layout
-                using (var baseKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens"))
+                foreach (var voice in synthesizer.GetInstalledVoices())
                 {
-                    if (baseKey != null)
+                    if (voice.Enabled)
                     {
-                        using (var targetKey = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Speech\Voices\Tokens"))
+                        string name = voice.VoiceInfo.Name;
+                        if (!cmbVoices.Items.Contains(name))
                         {
-                            foreach (string subKeyName in baseKey.GetSubKeyNames())
-                            {
-                                if (subKeyName.Contains("Andrew", StringComparison.OrdinalIgnoreCase) || subKeyName.Contains("Natural", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    using (var sourceSubKey = baseKey.OpenSubKey(subKeyName))
-                                    {
-                                        if (sourceSubKey != null && targetKey.OpenSubKey(subKeyName) == null)
-                                        {
-                                            // Safely mirror the registry node so SAPI can target it natively
-                                            using (var destSubKey = targetKey.CreateSubKey(subKeyName))
-                                            {
-                                                foreach (string valueName in sourceSubKey.GetValueNames())
-                                                {
-                                                    destSubKey.SetValue(valueName, sourceSubKey.GetValue(valueName));
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            cmbVoices.Items.Add(name);
                         }
                     }
                 }
@@ -273,18 +263,21 @@ namespace NoxTTS
 
             try
             {
-                Type? sapiType = Type.GetTypeFromProgID("SAPI.SpVoice");
-                if (sapiType != null)
+                using (RegistryKey? baseKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens"))
                 {
-                    dynamic? sapiVoice = Activator.CreateInstance(sapiType);
-                    if (sapiVoice != null)
+                    if (baseKey != null)
                     {
-                        foreach (var token in sapiVoice.GetVoices())
+                        foreach (string subKeyName in baseKey.GetSubKeyNames())
                         {
-                            string desc = token.GetDescription();
-                            if (!cmbVoices.Items.Contains(desc))
+                            string formattedName = $"{subKeyName} - English (United States)";
+                            if (subKeyName.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
                             {
-                                cmbVoices.Items.Add(desc);
+                                formattedName = "Microsoft Andrew (Natural HD) - English (United States)";
+                            }
+
+                            if (!cmbVoices.Items.Contains(formattedName))
+                            {
+                                cmbVoices.Items.Add(formattedName);
                             }
                         }
                     }
@@ -303,6 +296,11 @@ namespace NoxTTS
                         break;
                     }
                 }
+            }
+            else
+            {
+                cmbVoices.Items.Add("Default System Voice");
+                cmbVoices.SelectedIndex = 0;
             }
         }
 
@@ -323,61 +321,67 @@ namespace NoxTTS
             string selectedVoice = cmbVoices.SelectedItem?.ToString() ?? "";
             int selectedDeviceIndex = cmbDevices.SelectedIndex;
             float volumeLevel = trackVolume.Value / 100f;
+            int speedRate = trackRate.Value;
+            string pitchSelection = cmbPitch.SelectedItem?.ToString() ?? "Default";
 
             try
             {
-                string tempFile = Path.Combine(Path.GetTempPath(), "nox_temp_speech.wav");
-                if (File.Exists(tempFile)) File.Delete(tempFile);
+                // Apply speed rate (-10 to 10)
+                synthesizer.Rate = speedRate;
 
-                Type? sapiType = Type.GetTypeFromProgID("SAPI.SpVoice");
-                Type? fileStreamType = Type.GetTypeFromProgID("SAPI.SpFileStream");
-
-                if (sapiType != null && fileStreamType != null)
+                if (!string.IsNullOrEmpty(selectedVoice) && selectedVoice != "Default System Voice")
                 {
-                    dynamic? voice = Activator.CreateInstance(sapiType);
-                    dynamic? fileStream = Activator.CreateInstance(fileStreamType);
-
-                    if (voice != null && fileStream != null)
-                    {
-                        fileStream.Open(tempFile, 3, false);
-                        voice.AudioOutputStream = fileStream;
-
-                        foreach (var token in voice.GetVoices())
+                    try 
+                    { 
+                        if (selectedVoice.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
                         {
-                            string desc = token.GetDescription();
-                            if (desc.Equals(selectedVoice, StringComparison.OrdinalIgnoreCase))
-                            {
-                                voice.Voice = token;
-                                break;
-                            }
+                            synthesizer.SelectVoiceByHints(VoiceGender.Male, VoiceAge.Adult, 0, System.Globalization.CultureInfo.GetCultureInfo("en-US"));
                         }
-
-                        voice.Speak(textToSpeak);
-                        fileStream.Close();
+                        else
+                        {
+                            synthesizer.SelectVoice(selectedVoice.Split('-')[0].Trim()); 
+                        }
+                    } 
+                    catch 
+                    {
+                        synthesizer.SelectVoice(selectedVoice);
                     }
                 }
 
-                if (File.Exists(tempFile))
+                MemoryStream stream = new MemoryStream();
+                synthesizer.SetOutputToAudioStream(stream, new System.Speech.AudioFormat.SpeechAudioFormatInfo(16000, System.Speech.AudioFormat.AudioBitsPerSample.Sixteen, System.Speech.AudioFormat.AudioChannel.Mono));
+                
+                // Handle Pitch via SSML PromptBuilder if custom pitch is selected
+                if (pitchSelection == "Default")
                 {
-                    using (var audioFile = new AudioFileReader(tempFile))
-                    {
-                        var volumeProvider = new VolumeSampleProvider(audioFile.ToSampleProvider())
-                        {
-                            Volume = volumeLevel
-                        };
+                    synthesizer.Speak(textToSpeak);
+                }
+                else
+                {
+                    string ssmlPitchValue = pitchSelection.ToLower().Replace("extra ", "x-");
+                    PromptBuilder builder = new PromptBuilder();
+                    builder.AppendSsmlMarkup($"<speak version=\"1.0\" xmlns=\"http://www.w3.org/2001/10/synthesis\"><prosody pitch=\"{ssmlPitchValue}\">{SecurityElement.Escape(textToSpeak)}</prosody></speak>");
+                    synthesizer.Speak(builder);
+                }
 
-                        using (var waveOut = new WaveOutEvent())
+                stream.Position = 0;
+                using (var reader = new RawSourceWaveStream(stream, new WaveFormat(16000, 16, 1)))
+                {
+                    var volumeProvider = new VolumeSampleProvider(reader.ToSampleProvider())
+                    {
+                        Volume = volumeLevel
+                    };
+
+                    using (var waveOut = new WaveOutEvent())
+                    {
+                        waveOut.DeviceNumber = selectedDeviceIndex;
+                        waveOut.Init(volumeProvider);
+                        waveOut.Play();
+                        while (waveOut.PlaybackState == PlaybackState.Playing)
                         {
-                            waveOut.DeviceNumber = selectedDeviceIndex;
-                            waveOut.Init(volumeProvider);
-                            waveOut.Play();
-                            while (waveOut.PlaybackState == PlaybackState.Playing)
-                            {
-                                System.Threading.Thread.Sleep(50);
-                            }
+                            System.Threading.Thread.Sleep(50);
                         }
                     }
-                    try { File.Delete(tempFile); } catch { }
                 }
             }
             catch (Exception ex)
