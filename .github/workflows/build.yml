@@ -18,8 +18,16 @@ jobs:
       with:
         dotnet-version: '8.0.x'
 
+    - name: Cache NuGet Packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/NoxTTS.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
     - name: Build and Publish
-      run: dotnet publish NoxTTS.csproj -c Release -r win-x64 --self-contained true -o ./publish
+      run: dotnet publish NoxTTS.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./publish
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
