@@ -236,7 +236,7 @@ namespace NoxTTS
         private void LoadSapiVoices()
         {
             try
-            (
+            {
                 Type? sapiType = Type.GetTypeFromProgID("SAPI.SpVoice");
                 if (sapiType != null)
                 {
@@ -253,7 +253,7 @@ namespace NoxTTS
                         }
                     }
                 }
-            )
+            }
             catch { }
 
             if (cmbVoices.Items.Count > 0)
@@ -295,7 +295,6 @@ namespace NoxTTS
 
             try
             {
-                // Create temp wave file path for rendering speech audio via COM SAPI
                 string tempFile = Path.Combine(Path.GetTempPath(), "nox_temp_speech.wav");
                 if (File.Exists(tempFile)) File.Delete(tempFile);
 
@@ -309,11 +308,9 @@ namespace NoxTTS
 
                     if (voice != null && fileStream != null)
                     {
-                        // Set output to file stream
                         fileStream.Open(tempFile, 3, false); // 3 = SSFMCreateForWrite
                         voice.AudioOutputStream = fileStream;
 
-                        // Match and set the selected voice token (including Andrew Natural HD)
                         foreach (var token in voice.GetVoices())
                         {
                             if (token.GetDescription().Equals(selectedVoice, StringComparison.OrdinalIgnoreCase))
@@ -328,7 +325,6 @@ namespace NoxTTS
                     }
                 }
 
-                // Play the generated WAV file directly into the Virtual Audio Cable via NAudio
                 if (File.Exists(tempFile))
                 {
                     using (var audioFile = new AudioFileReader(tempFile))
