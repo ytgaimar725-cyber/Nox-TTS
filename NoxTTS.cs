@@ -55,6 +55,19 @@ namespace NoxTTS
             
             this.Region = Region.FromHrgn(CreateRoundRectRgn(0, 0, this.Width, this.Height, 16, 16));
 
+            // Load icon.png directly for the form application icon
+            try
+            {
+                if (File.Exists("icon.png"))
+                {
+                    using (var bmp = new Bitmap("icon.png"))
+                    {
+                        this.Icon = Icon.FromHandle(bmp.GetHicon());
+                    }
+                }
+            }
+            catch { }
+
             synthesizer = new SpeechSynthesizer();
 
             this.Paint += (s, e) => {
@@ -227,7 +240,6 @@ namespace NoxTTS
 
         private void LoadAllSystemVoices()
         {
-            // Load standard SAPI5 voices
             try
             {
                 foreach (var voice in synthesizer.GetInstalledVoices())
@@ -244,7 +256,6 @@ namespace NoxTTS
             }
             catch { }
 
-            // Load OneCore / Natural HD voices explicitly from registry paths so Andrew appears cleanly
             try
             {
                 using (RegistryKey? baseKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens"))
@@ -253,30 +264,15 @@ namespace NoxTTS
                     {
                         foreach (string subKeyName in baseKey.GetSubKeyNames())
                         {
-                            using (RegistryKey? tokenKey = baseKey.OpenSubKey(subKeyName))
+                            string formattedName = $"{subKeyName} - English (United States)";
+                            if (subKeyName.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
                             {
-                                string voiceLabel = subKeyName;
-                                if (voiceLabel.Contains("MSTTS_V110_"))
-                                {
-                                    voiceLabel = voiceLabel.Replace("MSTTS_V110_", "").Replace("enUS", "Microsoft ").Replace("Natural", "(Natural HD)");
-                                }
-                                
-                                object? attrKey = tokenKey?.OpenSubKey("Attributes")?.GetValue("Name");
-                                if (attrKey != null)
-                                {
-                                    voiceLabel = attrKey.ToString()!;
-                                }
+                                formattedName = "Microsoft Andrew (Natural HD) - English (United States)";
+                            }
 
-                                string formattedName = $"{subKeyName} - English (United States)";
-                                if (subKeyName.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    formattedName = "Microsoft Andrew (Natural HD) - English (United States)";
-                                }
-
-                                if (!cmbVoices.Items.Contains(formattedName))
-                                {
-                                    cmbVoices.Items.Add(formattedName);
-                                }
+                            if (!cmbVoices.Items.Contains(formattedName))
+                            {
+                                cmbVoices.Items.Add(formattedName);
                             }
                         }
                     }
@@ -287,7 +283,6 @@ namespace NoxTTS
             if (cmbVoices.Items.Count > 0)
             {
                 cmbVoices.SelectedIndex = 0;
-                // Auto-select Andrew if present in the list
                 for (int i = 0; i < cmbVoices.Items.Count; i++)
                 {
                     if (cmbVoices.Items[i].ToString()!.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
@@ -304,7 +299,7 @@ namespace NoxTTS
             }
         }
 
-        private void TxtInput_KeyDown(object sender, KeyEventArgs e)
+        private void TxtInput_KeyDown(object? sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)
             {
@@ -326,7 +321,6 @@ namespace NoxTTS
             {
                 if (!string.IsNullOrEmpty(selectedVoice) && selectedVoice != "Default System Voice")
                 {
-                    // Clean up string identifier to successfully hook the engine onto Andrew or chosen model
                     try 
                     { 
                         if (selectedVoice.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
@@ -370,7 +364,7 @@ namespace NoxTTS
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error: " + ex.Message, "NoxTTS Error", MessageBoxButtons.Ikon, MessageBoxIcon.Error);
+                MessageBox.Show("Error: " + ex.Message, "NoxTTS Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
             txtInput.Clear();
