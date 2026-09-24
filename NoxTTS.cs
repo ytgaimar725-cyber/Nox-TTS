@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Speech.Synthesis;
 using System.Windows.Forms;
+using Microsoft.Win32;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
@@ -19,24 +20,22 @@ namespace NoxTTS
         private Label lblVolumeValue;
         private Button btnSpeak;
         
-        // Window Dragging Support
         [DllImport("user32.dll")]
         public static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
         [DllImport("user32.dll")]
         public static extern bool ReleaseCapture();
 
-        // Rounded Corners Support
         [DllImport("Gdi32.dll", EntryPoint = "CreateRoundRectRgn")]
         private static extern IntPtr CreateRoundRectRgn(int nLeftRect, int nTopRect, int nRightRect, int nBottomRect, int nWidthEllipse, int nHeightEllipse);
 
-        // Midnight Neon & Minimalist Dark Palette
-        private readonly Color BgColor = Color.FromArgb(15, 15, 18);          // Deep matte black-charcoal
-        private readonly Color PanelColor = Color.FromArgb(24, 24, 29);       // Smooth surface containers
-        private readonly Color BorderColor = Color.FromArgb(40, 40, 48);     // Subtle borders
-        private readonly Color TextPrimary = Color.FromArgb(245, 245, 250);  // Crisp white
-        private readonly Color TextMuted = Color.FromArgb(140, 140, 155);    // Soft secondary labels
-        private readonly Color AccentCyan = Color.FromArgb(0, 229, 255);     // Neon Cyan Accent
-        private readonly Color AccentHover = Color.FromArgb(50, 240, 255);   // Bright hover cyan
+        // Midnight Palette with crisp white framing elements
+        private readonly Color BgColor = Color.FromArgb(14, 14, 17);
+        private readonly Color PanelColor = Color.FromArgb(22, 22, 27);
+        private readonly Color OutlineWhite = Color.FromArgb(210, 210, 220); // White border outline
+        private readonly Color TextPrimary = Color.FromArgb(250, 250, 255);
+        private readonly Color TextMuted = Color.FromArgb(135, 135, 150);
+        private readonly Color AccentCyan = Color.FromArgb(0, 229, 255);
+        private readonly Color AccentHover = Color.FromArgb(50, 240, 255);
 
         [STAThread]
         public static void Main()
@@ -49,16 +48,16 @@ namespace NoxTTS
         public MainForm()
         {
             this.Text = "NoxTTS";
-            this.Size = new Size(460, 400);
+            this.Size = new Size(460, 410);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = BgColor;
             this.ForeColor = TextPrimary;
-            this.FormBorderStyle = FormBorderStyle.None; // Removes standard old Windows frame for a modern look
+            this.FormBorderStyle = FormBorderStyle.None;
             
-            // Apply Smooth Rounded Corners to the Main Window (14px radius)
-            this.Region = Region.FromHrgn(CreateRoundRectRgn(0, 0, this.Width, this.Height, 14, 14));
+            // Smooth Rounded Corners
+            this.Region = Region.FromHrgn(CreateRoundRectRgn(0, 0, this.Width, this.Height, 16, 16));
 
-            // Load custom app icon if present
+            // Setup App Icon securely from file
             try
             {
                 if (File.Exists("icon.png"))
@@ -73,8 +72,23 @@ namespace NoxTTS
 
             synthesizer = new SpeechSynthesizer();
 
+            // --- White Outline Border Panel (Wrapper) ---
+            Panel pnlBorder = new Panel()
+            {
+                Left = 1, Top = 1, Width = 458, Height = 408,
+                BackColor = BgColor,
+                Enabled = false
+            };
+            // Paint subtle outer white border via custom border logic or panel wrapper styling
+            this.Paint += (s, e) => {
+                using (Pen whitePen = new Pen(OutlineWhite, 1.5f))
+                {
+                    e.Graphics.DrawRectangle(whitePen, 0, 0, this.Width - 1, this.Height - 1);
+                }
+            };
+
             // --- Custom Modern Title Bar ---
-            Panel pnlTitleBar = new Panel() { Left = 0, Top = 0, Width = 460, Height = 36, BackColor = BgColor };
+            Panel pnlTitleBar = new Panel() { Left = 2, Top = 2, Width = 456, Height = 36, BackColor = BgColor };
             pnlTitleBar.MouseDown += (s, e) => {
                 if (e.Button == MouseButtons.Left) {
                     ReleaseCapture();
@@ -83,9 +97,9 @@ namespace NoxTTS
             };
 
             Label lblTitle = new Label() { 
-                Text = "NOX•TTS", 
+                Text = "NOX • VOICE BRIDGE", 
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold), 
-                Left = 16, Top = 10, Width = 200, Height = 20, 
+                Left = 18, Top = 10, Width = 250, Height = 20, 
                 ForeColor = AccentCyan 
             };
             lblTitle.MouseDown += (s, e) => {
@@ -98,7 +112,7 @@ namespace NoxTTS
             Button btnClose = new Button() { 
                 Text = "×", 
                 Font = new Font("Segoe UI", 12F, FontStyle.Regular),
-                Left = 420, Top = 6, Width = 26, Height = 24, 
+                Left = 416, Top = 6, Width = 26, Height = 24, 
                 FlatStyle = FlatStyle.Flat, 
                 ForeColor = TextMuted, 
                 BackColor = BgColor,
@@ -106,13 +120,13 @@ namespace NoxTTS
             };
             btnClose.FlatAppearance.BorderSize = 0;
             btnClose.Click += (s, e) => Application.Exit();
-            btnClose.MouseEnter += (s, e) => { btnClose.ForeColor = Color.White; btnClose.BackColor = Color.FromArgb(220, 50, 50); };
+            btnClose.MouseEnter += (s, e) => { btnClose.ForeColor = Color.White; btnClose.BackColor = Color.FromArgb(230, 50, 50); };
             btnClose.MouseLeave += (s, e) => { btnClose.ForeColor = TextMuted; btnClose.BackColor = BgColor; };
 
             pnlTitleBar.Controls.Add(lblTitle);
             pnlTitleBar.Controls.Add(btnClose);
 
-            // --- Main Content Components ---
+            // --- Main Content Inputs & Selection Slots ---
 
             txtInput = new TextBox() 
             { 
@@ -127,49 +141,49 @@ namespace NoxTTS
 
             Label lblVoice = new Label() 
             { 
-                Text = "Voice Model", 
+                Text = "Voice Model Slot", 
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Regular),
-                Left = 20, Top = 138, Width = 196, 
+                Left = 20, Top = 140, Width = 196, 
                 ForeColor = TextMuted 
             };
             
             cmbVoices = new ComboBox() 
             { 
-                Left = 20, Top = 158, Width = 200, Height = 25, 
+                Left = 20, Top = 160, Width = 200, Height = 28, 
                 DropDownStyle = ComboBoxStyle.DropDownList, 
                 BackColor = PanelColor, 
                 ForeColor = TextPrimary,
-                Font = new Font("Segoe UI", 9F)
+                Font = new Font("Segoe UI", 9.5F)
             };
 
             Label lblDevice = new Label() 
             { 
-                Text = "Virtual Audio Output", 
+                Text = "Virtual Audio Cable Slot", 
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Regular),
-                Left = 240, Top = 138, Width = 196, 
+                Left = 240, Top = 140, Width = 196, 
                 ForeColor = TextMuted 
             };
             
             cmbDevices = new ComboBox() 
             { 
-                Left = 240, Top = 158, Width = 200, Height = 25, 
+                Left = 240, Top = 160, Width = 200, Height = 28, 
                 DropDownStyle = ComboBoxStyle.DropDownList, 
                 BackColor = PanelColor, 
                 ForeColor = TextPrimary,
-                Font = new Font("Segoe UI", 9F)
+                Font = new Font("Segoe UI", 9.5F)
             };
 
             Label lblVolume = new Label() 
             { 
-                Text = "Volume", 
+                Text = "Volume Output", 
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Regular),
-                Left = 20, Top = 202, Width = 60, 
+                Left = 20, Top = 205, Width = 90, 
                 ForeColor = TextMuted 
             };
             
             trackVolume = new TrackBar()
             {
-                Left = 75, Top = 196, Width = 330, Height = 35,
+                Left = 110, Top = 198, Width = 290, Height = 35,
                 Minimum = 0, Maximum = 100, Value = 100,
                 TickFrequency = 10,
                 BackColor = BgColor
@@ -179,7 +193,7 @@ namespace NoxTTS
             { 
                 Text = "100%", 
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
-                Left = 405, Top = 202, Width = 40, 
+                Left = 405, Top = 205, Width = 40, 
                 ForeColor = AccentCyan 
             };
 
@@ -187,27 +201,10 @@ namespace NoxTTS
                 lblVolumeValue.Text = trackVolume.Value + "%";
             };
 
-            // Load Installed System Voices (Strictly prioritizing Male voices with clean fallback)
-            foreach (var voice in synthesizer.GetInstalledVoices())
-            {
-                if (voice.Enabled && voice.VoiceInfo.Gender == VoiceGender.Male)
-                {
-                    cmbVoices.Items.Add(voice.VoiceInfo.Name);
-                }
-            }
+            // Comprehensive Voice Discovery (Scans standard SAPI5 + OneCore downloaded tokens)
+            LoadAllSystemVoices();
 
-            if (cmbVoices.Items.Count == 0)
-            {
-                foreach (var voice in synthesizer.GetInstalledVoices())
-                {
-                    if (voice.Enabled) cmbVoices.Items.Add(voice.VoiceInfo.Name);
-                }
-            }
-
-            if (cmbVoices.Items.Count == 0) cmbVoices.Items.Add("Default System Voice");
-            cmbVoices.SelectedIndex = 0;
-
-            // Load Wave Output Devices and auto-select VB-Cable Input
+            // Load Wave Output Devices & auto-select VB-Cable Input
             for (int i = 0; i < WaveOut.DeviceCount; i++)
             {
                 var caps = WaveOut.GetCapabilities(i);
@@ -219,14 +216,14 @@ namespace NoxTTS
             }
             if (cmbDevices.SelectedIndex == -1 && cmbDevices.Items.Count > 0) cmbDevices.SelectedIndex = 0;
 
-            // Sleek Minimalist Flat Button with Interactive Cyan Hover
+            // Sleek Interactive Action Button
             btnSpeak = new Button() 
             { 
                 Text = "BROADCAST TO CABLE", 
                 Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
-                Left = 20, Top = 262, Width = 420, Height = 42,
+                Left = 20, Top = 268, Width = 420, Height = 42,
                 BackColor = AccentCyan, 
-                ForeColor = Color.FromArgb(15, 15, 18), 
+                ForeColor = Color.FromArgb(14, 14, 17), 
                 FlatStyle = FlatStyle.Flat,
                 Cursor = Cursors.Hand
             };
@@ -237,14 +234,14 @@ namespace NoxTTS
 
             Label lblHint = new Label()
             {
-                Text = "Tip: Press Enter in text box to broadcast instantly.",
+                Text = "Tip: Press Enter in the text box to broadcast immediately.",
                 Font = new Font("Segoe UI", 8.25F, FontStyle.Italic),
-                Left = 20, Top = 320, Width = 420,
-                ForeColor = Color.FromArgb(100, 100, 115),
+                Left = 20, Top = 330, Width = 420,
+                ForeColor = Color.FromArgb(110, 110, 125),
                 TextAlign = ContentAlignment.MiddleCenter
             };
 
-            // Add controls
+            // Add Controls to Form
             this.Controls.Add(pnlTitleBar);
             this.Controls.Add(txtInput);
             this.Controls.Add(lblVoice);
@@ -256,6 +253,68 @@ namespace NoxTTS
             this.Controls.Add(lblVolumeValue);
             this.Controls.Add(btnSpeak);
             this.Controls.Add(lblHint);
+        }
+
+        private void LoadAllSystemVoices()
+        {
+            // Standard SAPI5 Voices via SpeechSynthesizer
+            try
+            {
+                foreach (var voice in synthesizer.GetInstalledVoices())
+                {
+                    if (voice.Enabled)
+                    {
+                        string name = voice.VoiceInfo.Name;
+                        if (!cmbVoices.Items.Contains(name))
+                        {
+                            cmbVoices.Items.Add(name);
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // Deep Registry Scan for downloaded Windows OneCore / Mobile Voice Packs
+            try
+            {
+                using (RegistryKey? baseKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens"))
+                {
+                    if (baseKey != null)
+                    {
+                        foreach (string subKeyName in baseKey.GetSubKeyNames())
+                        {
+                            using (RegistryKey? tokenKey = baseKey.OpenSubKey(subKeyName))
+                            {
+                                object? displayName = tokenKey?.GetValue("") ?? tokenKey?.GetValue("ıcı");
+                                if (displayName != null)
+                                {
+                                    string cleanName = displayName.ToString()!;
+                                    if (cleanName.Contains("Token")) cleanName = subKeyName;
+                                    
+                                    if (!cmbVoices.Items.Contains(cleanName))
+                                    {
+                                        cmbVoices.Items.Add(cleanName);
+                                    }
+                                }
+                                else
+                                {
+                                    if (!cmbVoices.Items.Contains(subKeyName))
+                                    {
+                                        cmbVoices.Items.Add(subKeyName);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            if (cmbVoices.Items.Count == 0)
+            {
+                cmbVoices.Items.Add("Default System Voice");
+            }
+            cmbVoices.SelectedIndex = 0;
         }
 
         private void TxtInput_KeyDown(object sender, KeyEventArgs e)
@@ -280,7 +339,7 @@ namespace NoxTTS
             {
                 if (!string.IsNullOrEmpty(selectedVoice) && selectedVoice != "Default System Voice")
                 {
-                    synthesizer.SelectVoice(selectedVoice);
+                    try { synthesizer.SelectVoice(selectedVoice); } catch { }
                 }
 
                 MemoryStream stream = new MemoryStream();
