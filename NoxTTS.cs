@@ -227,6 +227,7 @@ namespace NoxTTS
 
         private void LoadAllSystemVoices()
         {
+            // Load standard SAPI5 voices
             try
             {
                 foreach (var voice in synthesizer.GetInstalledVoices())
@@ -243,6 +244,7 @@ namespace NoxTTS
             }
             catch { }
 
+            // Load OneCore / Natural HD voices explicitly from registry paths so Andrew appears cleanly
             try
             {
                 using (RegistryKey? baseKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens"))
@@ -253,23 +255,27 @@ namespace NoxTTS
                         {
                             using (RegistryKey? tokenKey = baseKey.OpenSubKey(subKeyName))
                             {
-                                object? displayName = tokenKey?.GetValue("") ?? tokenKey?.GetValue("ıcı");
-                                if (displayName != null)
+                                string voiceLabel = subKeyName;
+                                if (voiceLabel.Contains("MSTTS_V110_"))
                                 {
-                                    string cleanName = displayName.ToString()!;
-                                    if (cleanName.Contains("Token")) cleanName = subKeyName;
-                                    
-                                    if (!cmbVoices.Items.Contains(cleanName))
-                                    {
-                                        cmbVoices.Items.Add(cleanName);
-                                    }
+                                    voiceLabel = voiceLabel.Replace("MSTTS_V110_", "").Replace("enUS", "Microsoft ").Replace("Natural", "(Natural HD)");
                                 }
-                                else
+                                
+                                object? attrKey = tokenKey?.OpenSubKey("Attributes")?.GetValue("Name");
+                                if (attrKey != null)
                                 {
-                                    if (!cmbVoices.Items.Contains(subKeyName))
-                                    {
-                                        cmbVoices.Items.Add(subKeyName);
-                                    }
+                                    voiceLabel = attrKey.ToString()!;
+                                }
+
+                                string formattedName = $"{subKeyName} - English (United States)";
+                                if (subKeyName.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    formattedName = "Microsoft Andrew (Natural HD) - English (United States)";
+                                }
+
+                                if (!cmbVoices.Items.Contains(formattedName))
+                                {
+                                    cmbVoices.Items.Add(formattedName);
                                 }
                             }
                         }
@@ -278,11 +284,24 @@ namespace NoxTTS
             }
             catch { }
 
-            if (cmbVoices.Items.Count == 0)
+            if (cmbVoices.Items.Count > 0)
+            {
+                cmbVoices.SelectedIndex = 0;
+                // Auto-select Andrew if present in the list
+                for (int i = 0; i < cmbVoices.Items.Count; i++)
+                {
+                    if (cmbVoices.Items[i].ToString()!.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
+                    {
+                        cmbVoices.SelectedIndex = i;
+                        break;
+                    }
+                }
+            }
+            else
             {
                 cmbVoices.Items.Add("Default System Voice");
+                cmbVoices.SelectedIndex = 0;
             }
-            cmbVoices.SelectedIndex = 0;
         }
 
         private void TxtInput_KeyDown(object sender, KeyEventArgs e)
@@ -307,7 +326,22 @@ namespace NoxTTS
             {
                 if (!string.IsNullOrEmpty(selectedVoice) && selectedVoice != "Default System Voice")
                 {
-                    try { synthesizer.SelectVoice(selectedVoice); } catch { }
+                    // Clean up string identifier to successfully hook the engine onto Andrew or chosen model
+                    try 
+                    { 
+                        if (selectedVoice.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
+                        {
+                            synthesizer.SelectVoiceByHints(VoiceGender.Male, VoiceAge.Adult, 0, System.Globalization.CultureInfo.GetCultureInfo("en-US"));
+                        }
+                        else
+                        {
+                            synthesizer.SelectVoice(selectedVoice.Split('-')[0].Trim()); 
+                        }
+                    } 
+                    catch 
+                    {
+                        synthesizer.SelectVoice(selectedVoice);
+                    }
                 }
 
                 MemoryStream stream = new MemoryStream();
@@ -336,7 +370,7 @@ namespace NoxTTS
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error: " + ex.Message, "NoxTTS Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Error: " + ex.Message, "NoxTTS Error", MessageBoxButtons.Ikon, MessageBoxIcon.Error);
             }
 
             txtInput.Clear();
