@@ -28,10 +28,9 @@ namespace NoxTTS
         [DllImport("Gdi32.dll", EntryPoint = "CreateRoundRectRgn")]
         private static extern IntPtr CreateRoundRectRgn(int nLeftRect, int nTopRect, int nRightRect, int nBottomRect, int nWidthEllipse, int nHeightEllipse);
 
-        // Midnight Palette with crisp white framing elements
         private readonly Color BgColor = Color.FromArgb(14, 14, 17);
         private readonly Color PanelColor = Color.FromArgb(22, 22, 27);
-        private readonly Color OutlineWhite = Color.FromArgb(210, 210, 220); // White border outline
+        private readonly Color OutlineWhite = Color.FromArgb(210, 210, 220);
         private readonly Color TextPrimary = Color.FromArgb(250, 250, 255);
         private readonly Color TextMuted = Color.FromArgb(135, 135, 150);
         private readonly Color AccentCyan = Color.FromArgb(0, 229, 255);
@@ -54,32 +53,10 @@ namespace NoxTTS
             this.ForeColor = TextPrimary;
             this.FormBorderStyle = FormBorderStyle.None;
             
-            // Smooth Rounded Corners
             this.Region = Region.FromHrgn(CreateRoundRectRgn(0, 0, this.Width, this.Height, 16, 16));
-
-            // Setup App Icon securely from file
-            try
-            {
-                if (File.Exists("icon.png"))
-                {
-                    using (var bmp = new Bitmap("icon.png"))
-                    {
-                        this.Icon = Icon.FromHandle(bmp.GetHicon());
-                    }
-                }
-            }
-            catch { }
 
             synthesizer = new SpeechSynthesizer();
 
-            // --- White Outline Border Panel (Wrapper) ---
-            Panel pnlBorder = new Panel()
-            {
-                Left = 1, Top = 1, Width = 458, Height = 408,
-                BackColor = BgColor,
-                Enabled = false
-            };
-            // Paint subtle outer white border via custom border logic or panel wrapper styling
             this.Paint += (s, e) => {
                 using (Pen whitePen = new Pen(OutlineWhite, 1.5f))
                 {
@@ -87,7 +64,6 @@ namespace NoxTTS
                 }
             };
 
-            // --- Custom Modern Title Bar ---
             Panel pnlTitleBar = new Panel() { Left = 2, Top = 2, Width = 456, Height = 36, BackColor = BgColor };
             pnlTitleBar.MouseDown += (s, e) => {
                 if (e.Button == MouseButtons.Left) {
@@ -125,8 +101,6 @@ namespace NoxTTS
 
             pnlTitleBar.Controls.Add(lblTitle);
             pnlTitleBar.Controls.Add(btnClose);
-
-            // --- Main Content Inputs & Selection Slots ---
 
             txtInput = new TextBox() 
             { 
@@ -201,10 +175,8 @@ namespace NoxTTS
                 lblVolumeValue.Text = trackVolume.Value + "%";
             };
 
-            // Comprehensive Voice Discovery (Scans standard SAPI5 + OneCore downloaded tokens)
             LoadAllSystemVoices();
 
-            // Load Wave Output Devices & auto-select VB-Cable Input
             for (int i = 0; i < WaveOut.DeviceCount; i++)
             {
                 var caps = WaveOut.GetCapabilities(i);
@@ -216,7 +188,6 @@ namespace NoxTTS
             }
             if (cmbDevices.SelectedIndex == -1 && cmbDevices.Items.Count > 0) cmbDevices.SelectedIndex = 0;
 
-            // Sleek Interactive Action Button
             btnSpeak = new Button() 
             { 
                 Text = "BROADCAST TO CABLE", 
@@ -241,7 +212,6 @@ namespace NoxTTS
                 TextAlign = ContentAlignment.MiddleCenter
             };
 
-            // Add Controls to Form
             this.Controls.Add(pnlTitleBar);
             this.Controls.Add(txtInput);
             this.Controls.Add(lblVoice);
@@ -257,7 +227,6 @@ namespace NoxTTS
 
         private void LoadAllSystemVoices()
         {
-            // Standard SAPI5 Voices via SpeechSynthesizer
             try
             {
                 foreach (var voice in synthesizer.GetInstalledVoices())
@@ -274,7 +243,6 @@ namespace NoxTTS
             }
             catch { }
 
-            // Deep Registry Scan for downloaded Windows OneCore / Mobile Voice Packs
             try
             {
                 using (RegistryKey? baseKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens"))
