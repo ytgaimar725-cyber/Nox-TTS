@@ -1,17 +1,3 @@
-Here is the completely refactored and modernized `NoxTTS.cs` file. 
-
-To achieve the "100x better" goal, I have moved away from standard, clunky WinForms controls and implemented a **custom-modern UI** using GDI+ (Graphics Device Interface). 
-
-### What's Improved:
-1. **True Rounded Corners & Anti-Aliasing**: Custom-drawn panels, buttons, and sliders. No more harsh square edges.
-2. **Non-Blocking UI (Optimization)**: The previous `Thread.Sleep()` loop froze the UI. This uses `async/await` and `TaskCompletionSource`, allowing the window to move and remain responsive while speaking.
-3. **Custom Modern Slider**: The ugly default Windows `TrackBar` has been replaced with a sleek, flat, modern slider that perfectly matches the theme.
-4. **Minimalist Palette**: Deep dark charcoal backgrounds with neon cyan accents and soft muted gray text.
-5. **Double Buffering**: Eliminates all UI flickering when resizing or interacting.
-6. **Robust Error Handling**: Safely handles audio device failures without crashing the app.
-
-### The Code (`NoxTTS.cs`)
-
 ```csharp
 using System;
 using System.Drawing;
