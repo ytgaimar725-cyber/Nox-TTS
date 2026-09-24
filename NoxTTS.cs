@@ -2,9 +2,7 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Speech.Synthesis;
 using System.Windows.Forms;
-using Microsoft.Win32;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
@@ -12,7 +10,6 @@ namespace NoxTTS
 {
     public partial class MainForm : Form
     {
-        private SpeechSynthesizer synthesizer;
         private TextBox txtInput;
         private ComboBox cmbVoices;
         private ComboBox cmbDevices;
@@ -67,8 +64,6 @@ namespace NoxTTS
                 }
             }
             catch { }
-
-            synthesizer = new SpeechSynthesizer();
 
             this.Paint += (s, e) => {
                 using (Pen whitePen = new Pen(OutlineWhite, 1.5f))
@@ -188,7 +183,7 @@ namespace NoxTTS
                 lblVolumeValue.Text = trackVolume.Value + "%";
             };
 
-            LoadAllSystemVoices();
+            LoadSapiVoices();
 
             for (int i = 0; i < WaveOut.DeviceCount; i++)
             {
@@ -238,28 +233,46 @@ namespace NoxTTS
             this.Controls.Add(lblHint);
         }
 
-        private void LoadAllSystemVoices()
+        private void LoadSapiVoices()
         {
-            cmbVoices.Items.Add("Microsoft Andrew (Natural HD)");
-            cmbVoices.Items.Add("Microsoft Guy (Natural)");
-
             try
-            {
-                foreach (var voice in synthesizer.GetInstalledVoices())
+            (
+                Type? sapiType = Type.GetTypeFromProgID("SAPI.SpVoice");
+                if (sapiType != null)
                 {
-                    if (voice.Enabled)
+                    dynamic? sapiVoice = Activator.CreateInstance(sapiType);
+                    if (sapiVoice != null)
                     {
-                        string name = voice.VoiceInfo.Name;
-                        if (!cmbVoices.Items.Contains(name))
+                        foreach (var token in sapiVoice.GetVoices())
                         {
-                            cmbVoices.Items.Add(name);
+                            string desc = token.GetDescription();
+                            if (!cmbVoices.Items.Contains(desc))
+                            {
+                                cmbVoices.Items.Add(desc);
+                            }
                         }
                     }
                 }
-            }
+            )
             catch { }
 
-            cmbVoices.SelectedIndex = 0;
+            if (cmbVoices.Items.Count > 0)
+            {
+                cmbVoices.SelectedIndex = 0;
+                for (int i = 0; i < cmbVoices.Items.Count; i++)
+                {
+                    if (cmbVoices.Items[i].ToString()!.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
+                    {
+                        cmbVoices.SelectedIndex = i;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                cmbVoices.Items.Add("Microsoft Andrew (Natural HD)");
+                cmbVoices.SelectedIndex = 0;
+            }
         }
 
         private void TxtInput_KeyDown(object? sender, KeyEventArgs e)
@@ -282,63 +295,61 @@ namespace NoxTTS
 
             try
             {
-                // Force direct registry lookup for Andrew's OneCore token so it doesn't fallback to David
-                if (selectedVoice.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
+                // Create temp wave file path for rendering speech audio via COM SAPI
+                string tempFile = Path.Combine(Path.GetTempPath(), "nox_temp_speech.wav");
+                if (File.Exists(tempFile)) File.Delete(tempFile);
+
+                Type? sapiType = Type.GetTypeFromProgID("SAPI.SpVoice");
+                Type? fileStreamType = Type.GetTypeFromProgID("SAPI.SpFileStream");
+
+                if (sapiType != null && fileStreamType != null)
                 {
-                    bool loadedOneCore = false;
-                    try
+                    dynamic? voice = Activator.CreateInstance(sapiType);
+                    dynamic? fileStream = Activator.CreateInstance(fileStreamType);
+
+                    if (voice != null && fileStream != null)
                     {
-                        using (RegistryKey? baseKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens"))
+                        // Set output to file stream
+                        fileStream.Open(tempFile, 3, false); // 3 = SSFMCreateForWrite
+                        voice.AudioOutputStream = fileStream;
+
+                        // Match and set the selected voice token (including Andrew Natural HD)
+                        foreach (var token in voice.GetVoices())
                         {
-                            if (baseKey != null)
+                            if (token.GetDescription().Equals(selectedVoice, StringComparison.OrdinalIgnoreCase))
                             {
-                                foreach (string subKeyName in baseKey.GetSubKeyNames())
-                                {
-                                    if (subKeyName.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        synthesizer.SelectVoice(subKeyName);
-                                        loadedOneCore = true;
-                                        break;
-                                    }
-                                }
+                                voice.Voice = token;
+                                break;
+                            }
+                        }
+
+                        voice.Speak(textToSpeak);
+                        fileStream.Close();
+                    }
+                }
+
+                // Play the generated WAV file directly into the Virtual Audio Cable via NAudio
+                if (File.Exists(tempFile))
+                {
+                    using (var audioFile = new AudioFileReader(tempFile))
+                    {
+                        var volumeProvider = new VolumeSampleProvider(audioFile.ToSampleProvider())
+                        {
+                            Volume = volumeLevel
+                        };
+
+                        using (var waveOut = new WaveOutEvent())
+                        {
+                            waveOut.DeviceNumber = selectedDeviceIndex;
+                            waveOut.Init(volumeProvider);
+                            waveOut.Play();
+                            while (waveOut.PlaybackState == PlaybackState.Playing)
+                            {
+                                System.Threading.Thread.Sleep(50);
                             }
                         }
                     }
-                    catch { }
-
-                    if (!loadedOneCore)
-                    {
-                        synthesizer.SelectVoiceByHints(VoiceGender.Male, VoiceAge.Adult, 0, System.Globalization.CultureInfo.GetCultureInfo("en-US"));
-                    }
-                }
-                else
-                {
-                    try { synthesizer.SelectVoice(selectedVoice); }
-                    catch { synthesizer.SelectVoiceByHints(VoiceGender.NotSet); }
-                }
-
-                MemoryStream stream = new MemoryStream();
-                synthesizer.SetOutputToAudioStream(stream, new System.Speech.AudioFormat.SpeechAudioFormatInfo(16000, System.Speech.AudioFormat.AudioBitsPerSample.Sixteen, System.Speech.AudioFormat.AudioChannel.Mono));
-                synthesizer.Speak(textToSpeak);
-
-                stream.Position = 0;
-                using (var reader = new RawSourceWaveStream(stream, new WaveFormat(16000, 16, 1)))
-                {
-                    var volumeProvider = new VolumeSampleProvider(reader.ToSampleProvider())
-                    {
-                        Volume = volumeLevel
-                    };
-
-                    using (var waveOut = new WaveOutEvent())
-                    {
-                        waveOut.DeviceNumber = selectedDeviceIndex;
-                        waveOut.Init(volumeProvider);
-                        waveOut.Play();
-                        while (waveOut.PlaybackState == PlaybackState.Playing)
-                        {
-                            System.Threading.Thread.Sleep(50);
-                        }
-                    }
+                    try { File.Delete(tempFile); } catch { }
                 }
             }
             catch (Exception ex)
