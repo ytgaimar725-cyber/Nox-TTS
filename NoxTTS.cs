@@ -3,6 +3,7 @@ using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using Microsoft.Win32;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
@@ -235,7 +236,40 @@ namespace NoxTTS
 
         private void LoadSapiVoices()
         {
-            cmbVoices.Items.Add("Microsoft Andrew (Natural HD)");
+            try
+            {
+                // Expose OneCore Natural voices (like Andrew) to standard SAPI enumeration layout
+                using (var baseKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens"))
+                {
+                    if (baseKey != null)
+                    {
+                        using (var targetKey = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Speech\Voices\Tokens"))
+                        {
+                            foreach (string subKeyName in baseKey.GetSubKeyNames())
+                            {
+                                if (subKeyName.Contains("Andrew", StringComparison.OrdinalIgnoreCase) || subKeyName.Contains("Natural", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    using (var sourceSubKey = baseKey.OpenSubKey(subKeyName))
+                                    {
+                                        if (sourceSubKey != null && targetKey.OpenSubKey(subKeyName) == null)
+                                        {
+                                            // Safely mirror the registry node so SAPI can target it natively
+                                            using (var destSubKey = targetKey.CreateSubKey(subKeyName))
+                                            {
+                                                foreach (string valueName in sourceSubKey.GetValueNames())
+                                                {
+                                                    destSubKey.SetValue(valueName, sourceSubKey.GetValue(valueName));
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
 
             try
             {
@@ -248,7 +282,7 @@ namespace NoxTTS
                         foreach (var token in sapiVoice.GetVoices())
                         {
                             string desc = token.GetDescription();
-                            if (!cmbVoices.Items.Contains(desc) && !desc.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
+                            if (!cmbVoices.Items.Contains(desc))
                             {
                                 cmbVoices.Items.Add(desc);
                             }
@@ -258,7 +292,18 @@ namespace NoxTTS
             }
             catch { }
 
-            cmbVoices.SelectedIndex = 0;
+            if (cmbVoices.Items.Count > 0)
+            {
+                cmbVoices.SelectedIndex = 0;
+                for (int i = 0; i < cmbVoices.Items.Count; i++)
+                {
+                    if (cmbVoices.Items[i].ToString()!.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
+                    {
+                        cmbVoices.SelectedIndex = i;
+                        break;
+                    }
+                }
+            }
         }
 
         private void TxtInput_KeyDown(object? sender, KeyEventArgs e)
@@ -300,12 +345,7 @@ namespace NoxTTS
                         foreach (var token in voice.GetVoices())
                         {
                             string desc = token.GetDescription();
-                            if (selectedVoice.Contains("Andrew", StringComparison.OrdinalIgnoreCase) && desc.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
-                            {
-                                voice.Voice = token;
-                                break;
-                            }
-                            else if (desc.Equals(selectedVoice, StringComparison.OrdinalIgnoreCase))
+                            if (desc.Equals(selectedVoice, StringComparison.OrdinalIgnoreCase))
                             {
                                 voice.Voice = token;
                                 break;
