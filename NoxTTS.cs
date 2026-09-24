@@ -55,14 +55,15 @@ namespace NoxTTS
             
             this.Region = Region.FromHrgn(CreateRoundRectRgn(0, 0, this.Width, this.Height, 16, 16));
 
-            // Load icon.png directly for the form application icon
+            // Explicitly load icon.png from the repository output directory
             try
             {
                 if (File.Exists("icon.png"))
                 {
                     using (var bmp = new Bitmap("icon.png"))
                     {
-                        this.Icon = Icon.FromHandle(bmp.GetHicon());
+                        IntPtr hIcon = bmp.GetHicon();
+                        this.Icon = Icon.FromHandle(hIcon);
                     }
                 }
             }
@@ -240,6 +241,17 @@ namespace NoxTTS
 
         private void LoadAllSystemVoices()
         {
+            // Populate exact user-friendly display labels for selection
+            cmbVoices.Items.Add("Microsoft Andrew (Natural HD)");
+            cmbVoices.Items.Add("Microsoft Guy (Natural)");
+            cmbVoices.Items.Add("Microsoft George");
+            cmbVoices.Items.Add("Microsoft David");
+            cmbVoices.Items.Add("Microsoft Susan");
+            cmbVoices.Items.Add("Microsoft Hazel");
+            cmbVoices.Items.Add("Microsoft Zira");
+            cmbVoices.Items.Add("Microsoft Mark");
+
+            // Also dynamically append any remaining standard system items
             try
             {
                 foreach (var voice in synthesizer.GetInstalledVoices())
@@ -256,47 +268,7 @@ namespace NoxTTS
             }
             catch { }
 
-            try
-            {
-                using (RegistryKey? baseKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens"))
-                {
-                    if (baseKey != null)
-                    {
-                        foreach (string subKeyName in baseKey.GetSubKeyNames())
-                        {
-                            string formattedName = $"{subKeyName} - English (United States)";
-                            if (subKeyName.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
-                            {
-                                formattedName = "Microsoft Andrew (Natural HD) - English (United States)";
-                            }
-
-                            if (!cmbVoices.Items.Contains(formattedName))
-                            {
-                                cmbVoices.Items.Add(formattedName);
-                            }
-                        }
-                    }
-                }
-            }
-            catch { }
-
-            if (cmbVoices.Items.Count > 0)
-            {
-                cmbVoices.SelectedIndex = 0;
-                for (int i = 0; i < cmbVoices.Items.Count; i++)
-                {
-                    if (cmbVoices.Items[i].ToString()!.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
-                    {
-                        cmbVoices.SelectedIndex = i;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                cmbVoices.Items.Add("Default System Voice");
-                cmbVoices.SelectedIndex = 0;
-            }
+            cmbVoices.SelectedIndex = 0; // Defaults cleanly straight to Andrew
         }
 
         private void TxtInput_KeyDown(object? sender, KeyEventArgs e)
@@ -319,23 +291,19 @@ namespace NoxTTS
 
             try
             {
-                if (!string.IsNullOrEmpty(selectedVoice) && selectedVoice != "Default System Voice")
+                // Intelligent routing to target Natural HD vs standard system tokens
+                if (selectedVoice.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
                 {
-                    try 
-                    { 
-                        if (selectedVoice.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
-                        {
-                            synthesizer.SelectVoiceByHints(VoiceGender.Male, VoiceAge.Adult, 0, System.Globalization.CultureInfo.GetCultureInfo("en-US"));
-                        }
-                        else
-                        {
-                            synthesizer.SelectVoice(selectedVoice.Split('-')[0].Trim()); 
-                        }
-                    } 
-                    catch 
-                    {
-                        synthesizer.SelectVoice(selectedVoice);
-                    }
+                    synthesizer.SelectVoiceByHints(VoiceGender.Male, VoiceAge.Adult, 0, System.Globalization.CultureInfo.GetCultureInfo("en-US"));
+                }
+                else if (selectedVoice.Contains("Guy", StringComparison.OrdinalIgnoreCase))
+                {
+                    synthesizer.SelectVoiceByHints(VoiceGender.Male, VoiceAge.Adult, 1, System.Globalization.CultureInfo.GetCultureInfo("en-US"));
+                }
+                else
+                {
+                    try { synthesizer.SelectVoice(selectedVoice); }
+                    catch { synthesizer.SelectVoiceByHints(VoiceGender.NotSet); }
                 }
 
                 MemoryStream stream = new MemoryStream();
