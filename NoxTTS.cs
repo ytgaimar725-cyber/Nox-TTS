@@ -55,7 +55,6 @@ namespace NoxTTS
             
             this.Region = Region.FromHrgn(CreateRoundRectRgn(0, 0, this.Width, this.Height, 16, 16));
 
-            // Explicitly load icon.png from the repository output directory
             try
             {
                 if (File.Exists("icon.png"))
@@ -241,17 +240,9 @@ namespace NoxTTS
 
         private void LoadAllSystemVoices()
         {
-            // Populate exact user-friendly display labels for selection
             cmbVoices.Items.Add("Microsoft Andrew (Natural HD)");
             cmbVoices.Items.Add("Microsoft Guy (Natural)");
-            cmbVoices.Items.Add("Microsoft George");
-            cmbVoices.Items.Add("Microsoft David");
-            cmbVoices.Items.Add("Microsoft Susan");
-            cmbVoices.Items.Add("Microsoft Hazel");
-            cmbVoices.Items.Add("Microsoft Zira");
-            cmbVoices.Items.Add("Microsoft Mark");
 
-            // Also dynamically append any remaining standard system items
             try
             {
                 foreach (var voice in synthesizer.GetInstalledVoices())
@@ -268,7 +259,7 @@ namespace NoxTTS
             }
             catch { }
 
-            cmbVoices.SelectedIndex = 0; // Defaults cleanly straight to Andrew
+            cmbVoices.SelectedIndex = 0;
         }
 
         private void TxtInput_KeyDown(object? sender, KeyEventArgs e)
@@ -291,14 +282,34 @@ namespace NoxTTS
 
             try
             {
-                // Intelligent routing to target Natural HD vs standard system tokens
+                // Force direct registry lookup for Andrew's OneCore token so it doesn't fallback to David
                 if (selectedVoice.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
                 {
-                    synthesizer.SelectVoiceByHints(VoiceGender.Male, VoiceAge.Adult, 0, System.Globalization.CultureInfo.GetCultureInfo("en-US"));
-                }
-                else if (selectedVoice.Contains("Guy", StringComparison.OrdinalIgnoreCase))
-                {
-                    synthesizer.SelectVoiceByHints(VoiceGender.Male, VoiceAge.Adult, 1, System.Globalization.CultureInfo.GetCultureInfo("en-US"));
+                    bool loadedOneCore = false;
+                    try
+                    {
+                        using (RegistryKey? baseKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens"))
+                        {
+                            if (baseKey != null)
+                            {
+                                foreach (string subKeyName in baseKey.GetSubKeyNames())
+                                {
+                                    if (subKeyName.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        synthesizer.SelectVoice(subKeyName);
+                                        loadedOneCore = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+
+                    if (!loadedOneCore)
+                    {
+                        synthesizer.SelectVoiceByHints(VoiceGender.Male, VoiceAge.Adult, 0, System.Globalization.CultureInfo.GetCultureInfo("en-US"));
+                    }
                 }
                 else
                 {
