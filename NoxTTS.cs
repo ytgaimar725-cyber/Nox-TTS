@@ -1,4 +1,3 @@
-```csharp
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -23,7 +22,7 @@ namespace NoxTTS
         private Label lblStatus;
 
         // Modern Midnight Neon Palette
-        private readonly Color BgColor = Color.FromArgb(14, 14, 16);          // Deep dark base
+        private readonly Color BgColor = Color.FromArgb(14, 14, 16);         // Deep dark base
         private readonly Color PanelColor = Color.FromArgb(24, 24, 28);      // Soft surface container
         private readonly Color BorderColor = Color.FromArgb(42, 42, 48);     // Subtle borders
         private readonly Color TextPrimary = Color.FromArgb(240, 240, 245);  // Crisp white/silver
@@ -119,10 +118,10 @@ namespace NoxTTS
                 BackColor = PanelColor,
                 ForeColor = TextPrimary,
                 FlatStyle = FlatStyle.Flat,
+                DrawMode = DrawMode.OwnerDrawFixed,
                 Font = new Font("Segoe UI", 9.5F)
             };
             cmbVoices.DrawItem += Cmb_DrawItem;
-            cmbVoices.SelectedIndexChanged += Cmb_DrawItem; // Force redraw on select
 
             var lblDevice = new Label()
             {
@@ -140,10 +139,10 @@ namespace NoxTTS
                 BackColor = PanelColor,
                 ForeColor = TextPrimary,
                 FlatStyle = FlatStyle.Flat,
+                DrawMode = DrawMode.OwnerDrawFixed,
                 Font = new Font("Segoe UI", 9.5F)
             };
             cmbDevices.DrawItem += Cmb_DrawItem;
-            cmbDevices.SelectedIndexChanged += Cmb_DrawItem;
 
             // --- Volume Slider ---
             var lblVolume = new Label()
@@ -218,7 +217,6 @@ namespace NoxTTS
 
         private void Cmb_DrawItem(object sender, DrawItemEventArgs e)
         {
-            // Custom drawing for ComboBox items to match dark theme
             if (e.Index < 0) return;
             ComboBox cmb = sender as ComboBox;
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -249,7 +247,6 @@ namespace NoxTTS
 
         private void LoadVoicesAndDevices()
         {
-            // Load Installed System Voices (Male preference with fallback)
             foreach (var voice in synthesizer.GetInstalledVoices())
             {
                 if (voice.Enabled && voice.VoiceInfo.Gender == VoiceGender.Male)
@@ -269,7 +266,6 @@ namespace NoxTTS
             if (cmbVoices.Items.Count == 0) cmbVoices.Items.Add("Default System Voice");
             cmbVoices.SelectedIndex = 0;
 
-            // Load Wave Output Devices and auto-select VB-Cable Input
             for (int i = 0; i < WaveOut.DeviceCount; i++)
             {
                 var caps = WaveOut.GetCapabilities(i);
@@ -286,7 +282,7 @@ namespace NoxTTS
         {
             if (e.KeyCode == Keys.Enter && !e.Shift)
             {
-                e.SuppressKeyPress = true; // Prevents new line on Enter
+                e.SuppressKeyPress = true;
                 _ = ExecuteSpeechAsync();
             }
         }
@@ -300,7 +296,6 @@ namespace NoxTTS
             int selectedDeviceIndex = cmbDevices.SelectedIndex;
             float volumeLevel = trackVolume.Value / 100f;
 
-            // UI State: Speaking
             btnSpeak.Enabled = false;
             btnSpeak.BackColor = BorderColor;
             lblStatus.Text = "Broadcasting...";
@@ -338,7 +333,7 @@ namespace NoxTTS
                                 waveOut.PlaybackStopped += (s, e) => tcs.TrySetResult(true);
                                 
                                 waveOut.Play();
-                                tcs.Task.Wait(); // Non-blocking wait inside background thread
+                                tcs.Task.Wait();
                             }
                         }
                     }
@@ -353,15 +348,16 @@ namespace NoxTTS
             }
             finally
             {
-                // UI State: Ready
-                txtInput.Clear();
-                btnSpeak.Enabled = true;
-                btnSpeak.BackColor = AccentCyan;
-                if (lblStatus.ForeColor != DangerRed)
-                {
-                    lblStatus.Text = "Ready.";
-                    lblStatus.ForeColor = TextMuted;
-                }
+                this.Invoke((MethodInvoker)delegate {
+                    txtInput.Clear();
+                    btnSpeak.Enabled = true;
+                    btnSpeak.BackColor = AccentCyan;
+                    if (lblStatus.ForeColor != DangerRed)
+                    {
+                        lblStatus.Text = "Ready.";
+                        lblStatus.ForeColor = TextMuted;
+                    }
+                });
             }
         }
     }
@@ -537,7 +533,6 @@ namespace NoxTTS
         }
     }
 
-    // Subclassed TextBox to fix selection colors natively without breaking default behavior
     public class ModernTextBox : TextBox
     {
         public ModernTextBox()
@@ -546,4 +541,3 @@ namespace NoxTTS
         }
     }
 }
-```
