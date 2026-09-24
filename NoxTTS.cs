@@ -235,6 +235,8 @@ namespace NoxTTS
 
         private void LoadSapiVoices()
         {
+            cmbVoices.Items.Add("Microsoft Andrew (Natural HD)");
+
             try
             {
                 Type? sapiType = Type.GetTypeFromProgID("SAPI.SpVoice");
@@ -246,7 +248,7 @@ namespace NoxTTS
                         foreach (var token in sapiVoice.GetVoices())
                         {
                             string desc = token.GetDescription();
-                            if (!cmbVoices.Items.Contains(desc))
+                            if (!cmbVoices.Items.Contains(desc) && !desc.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
                             {
                                 cmbVoices.Items.Add(desc);
                             }
@@ -256,23 +258,7 @@ namespace NoxTTS
             }
             catch { }
 
-            if (cmbVoices.Items.Count > 0)
-            {
-                cmbVoices.SelectedIndex = 0;
-                for (int i = 0; i < cmbVoices.Items.Count; i++)
-                {
-                    if (cmbVoices.Items[i].ToString()!.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
-                    {
-                        cmbVoices.SelectedIndex = i;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                cmbVoices.Items.Add("Microsoft Andrew (Natural HD)");
-                cmbVoices.SelectedIndex = 0;
-            }
+            cmbVoices.SelectedIndex = 0;
         }
 
         private void TxtInput_KeyDown(object? sender, KeyEventArgs e)
@@ -308,12 +294,18 @@ namespace NoxTTS
 
                     if (voice != null && fileStream != null)
                     {
-                        fileStream.Open(tempFile, 3, false); // 3 = SSFMCreateForWrite
+                        fileStream.Open(tempFile, 3, false);
                         voice.AudioOutputStream = fileStream;
 
                         foreach (var token in voice.GetVoices())
                         {
-                            if (token.GetDescription().Equals(selectedVoice, StringComparison.OrdinalIgnoreCase))
+                            string desc = token.GetDescription();
+                            if (selectedVoice.Contains("Andrew", StringComparison.OrdinalIgnoreCase) && desc.Contains("Andrew", StringComparison.OrdinalIgnoreCase))
+                            {
+                                voice.Voice = token;
+                                break;
+                            }
+                            else if (desc.Equals(selectedVoice, StringComparison.OrdinalIgnoreCase))
                             {
                                 voice.Voice = token;
                                 break;
