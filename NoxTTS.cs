@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Speech.Synthesis;
 using System.Windows.Forms;
+using Microsoft.Web.WebView2.WinForms;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
@@ -22,8 +23,10 @@ namespace NoxTTS
         private Button btnSpeak;
         
         // Navigation / Tabs state
-        private Label lblTabMain, lblTabSettings;
-        private Panel pnlMainTab, pnlSettingsTab;
+        private Label lblTabMain, lblTabWeb, lblTabSettings;
+        private Panel pnlMainTab, pnlWebTab, pnlSettingsTab;
+        private WebView2 webView;
+        private ComboBox cmbWebDevices; // Cable selector for the web tab panel
 
         [DllImport("user32.dll")]
         public static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
@@ -53,7 +56,7 @@ namespace NoxTTS
         public MainForm()
         {
             this.Text = "NoxTTS";
-            this.Size = new Size(480, 420);
+            this.Size = new Size(500, 480);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = WindowBg;
             this.ForeColor = TextPrimary;
@@ -63,12 +66,9 @@ namespace NoxTTS
 
             try
             {
-                if (File.Exists("icon.png"))
+                if (File.Exists("icon.ico"))
                 {
-                    using (var bmp = new Bitmap("icon.png"))
-                    {
-                        this.Icon = Icon.FromHandle(bmp.GetHicon());
-                    }
+                    this.Icon = new Icon("icon.ico");
                 }
             }
             catch { }
@@ -84,7 +84,7 @@ namespace NoxTTS
             };
 
             // --- Title Bar ---
-            Panel pnlTitleBar = new Panel() { Left = 2, Top = 2, Width = 476, Height = 40, BackColor = WindowBg };
+            Panel pnlTitleBar = new Panel() { Left = 2, Top = 2, Width = 496, Height = 40, BackColor = WindowBg };
             pnlTitleBar.MouseDown += (s, e) => {
                 if (e.Button == MouseButtons.Left) {
                     ReleaseCapture();
@@ -95,7 +95,7 @@ namespace NoxTTS
             Label lblTitle = new Label() { 
                 Text = "NoxTTS", 
                 Font = new Font("Segoe UI", 10F, FontStyle.Bold), 
-                Left = 16, Top = 10, Width = 100, Height = 22, 
+                Left = 16, Top = 10, Width = 80, Height = 22, 
                 ForeColor = TextPrimary 
             };
             lblTitle.MouseDown += (s, e) => {
@@ -105,14 +105,15 @@ namespace NoxTTS
                 }
             };
 
-            // Tabs matching the reference image layout
-            lblTabMain = CreateTabLabel("Console", 110, true, () => SwitchTab(true));
-            lblTabSettings = CreateTabLabel("Config", 185, false, () => SwitchTab(false));
+            // Navigation Tabs
+            lblTabMain = CreateTabLabel("Console", 105, true, () => SwitchTab(0));
+            lblTabWeb = CreateTabLabel("TTS Web", 175, false, () => SwitchTab(1));
+            lblTabSettings = CreateTabLabel("Config", 245, false, () => SwitchTab(2));
 
             Button btnClose = new Button() { 
                 Text = "×", 
                 Font = new Font("Segoe UI", 12F, FontStyle.Regular),
-                Left = 434, Top = 6, Width = 28, Height = 26, 
+                Left = 454, Top = 6, Width = 28, Height = 26, 
                 FlatStyle = FlatStyle.Flat, 
                 ForeColor = TextMuted, 
                 BackColor = WindowBg,
@@ -125,15 +126,16 @@ namespace NoxTTS
 
             pnlTitleBar.Controls.Add(lblTitle);
             pnlTitleBar.Controls.Add(lblTabMain);
+            pnlTitleBar.Controls.Add(lblTabWeb);
             pnlTitleBar.Controls.Add(lblTabSettings);
             pnlTitleBar.Controls.Add(btnClose);
 
             // --- Tab 1: Main Console Panel ---
-            pnlMainTab = new Panel() { Left = 16, Top = 50, Width = 448, Height = 350, BackColor = WindowBg };
+            pnlMainTab = new Panel() { Left = 16, Top = 55, Width = 468, Height = 405, BackColor = WindowBg };
             
             txtInput = new TextBox() 
             { 
-                Left = 0, Top = 5, Width = 448, Height = 105, 
+                Left = 0, Top = 5, Width = 468, Height = 105, 
                 Multiline = true, 
                 BackColor = CardBg, 
                 ForeColor = TextPrimary, 
@@ -142,24 +144,21 @@ namespace NoxTTS
             };
             txtInput.KeyDown += TxtInput_KeyDown;
 
-            // Wrap textbox in a border card panel for the UI aesthetic
-            Panel pnlTextBoxCard = new Panel() { Left = 0, Top = 5, Width = 448, Height = 110, BackColor = BorderColor };
-            txtInput.Left = 1; txtInput.Top = 1; txtInput.Width = 446; txtInput.Height = 108;
+            Panel pnlTextBoxCard = new Panel() { Left = 0, Top = 5, Width = 468, Height = 110, BackColor = BorderColor };
+            txtInput.Left = 1; txtInput.Top = 1; txtInput.Width = 466; txtInput.Height = 108;
             pnlTextBoxCard.Controls.Add(txtInput);
 
-            // Voice Selector Card
-            Label lblVoice = new Label() { Text = "Voice Model Slot", Font = new Font("Segoe UI", 8.5F, FontStyle.Regular), Left = 0, Top = 126, Width = 210, ForeColor = TextMuted };
-            cmbVoices = CreateStyledComboBox(0, 146, 215);
+            Label lblVoice = new Label() { Text = "Voice Model Slot", Font = new Font("Segoe UI", 8.5F, FontStyle.Regular), Left = 0, Top = 126, Width = 220, ForeColor = TextMuted };
+            cmbVoices = CreateStyledComboBox(0, 146, 225);
 
-            // Device Selector Card
-            Label lblDevice = new Label() { Text = "Virtual Audio Cable Slot", Font = new Font("Segoe UI", 8.5F, FontStyle.Regular), Left = 233, Top = 126, Width = 215, ForeColor = TextMuted };
-            cmbDevices = CreateStyledComboBox(233, 146, 215);
+            Label lblDevice = new Label() { Text = "Virtual Audio Cable Slot", Font = new Font("Segoe UI", 8.5F, FontStyle.Regular), Left = 243, Top = 126, Width = 225, ForeColor = TextMuted };
+            cmbDevices = CreateStyledComboBox(243, 146, 225);
 
             btnSpeak = new Button() 
             { 
                 Text = "BROADCAST TO CABLE", 
                 Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
-                Left = 0, Top = 195, Width = 448, Height = 44,
+                Left = 0, Top = 195, Width = 468, Height = 44,
                 BackColor = AccentCyan, 
                 ForeColor = Color.FromArgb(14, 14, 17), 
                 FlatStyle = FlatStyle.Flat,
@@ -174,7 +173,7 @@ namespace NoxTTS
             {
                 Text = "Tip: Press Enter in the text box to broadcast immediately.",
                 Font = new Font("Segoe UI", 8.25F, FontStyle.Italic),
-                Left = 0, Top = 250, Width = 448,
+                Left = 0, Top = 250, Width = 468,
                 ForeColor = TextMuted,
                 TextAlign = ContentAlignment.MiddleCenter
             };
@@ -187,21 +186,38 @@ namespace NoxTTS
             pnlMainTab.Controls.Add(btnSpeak);
             pnlMainTab.Controls.Add(lblHint);
 
-            // --- Tab 2: Settings / Config Panel ---
-            pnlSettingsTab = new Panel() { Left = 16, Top = 50, Width = 448, Height = 350, BackColor = WindowBg, Visible = false };
+            // --- Tab 2: TTS Web Integration Panel (ttstool.com) ---
+            pnlWebTab = new Panel() { Left = 16, Top = 55, Width = 468, Height = 405, BackColor = WindowBg, Visible = false };
+            
+            webView = new WebView2() { Left = 0, Top = 0, Width = 468, Height = 310 };
+            InitializeWebViewAsync();
 
-            // Volume Control Setting Card
+            // Config frame underneath the web tool for routing audio to the Virtual Audio Cable
+            Panel pnlWebCableCard = new Panel() { Left = 0, Top = 318, Width = 468, Height = 75, BackColor = CardBg };
+            Label lblWebCableTitle = new Label() { Text = "Web Audio Routing Configuration", Font = new Font("Segoe UI", 9F, FontStyle.Bold), Left = 12, Top = 10, Width = 300, ForeColor = TextPrimary };
+            Label lblWebCableDesc = new Label() { Text = "Select Virtual Audio Cable for web tool output routing:", Font = new Font("Segoe UI", 8F), Left = 12, Top = 28, Width = 440, ForeColor = TextMuted };
+            
+            cmbWebDevices = CreateStyledComboBox(12, 44, 444);
+            pnlWebCableCard.Controls.Add(lblWebCableTitle);
+            pnlWebCableCard.Controls.Add(lblWebCableDesc);
+            pnlWebCableCard.Controls.Add(cmbWebDevices);
+
+            pnlWebTab.Controls.Add(webView);
+            pnlWebTab.Controls.Add(pnlWebCableCard);
+
+            // --- Tab 3: Settings / Config Panel ---
+            pnlSettingsTab = new Panel() { Left = 16, Top = 55, Width = 468, Height = 405, BackColor = WindowBg, Visible = false };
+
             Panel pnlVolCard = CreateSettingCard(0, 10, "Output Volume", "Adjusts the master volume piped into the virtual cable.");
-            trackVolume = new TrackBar() { Left = 15, Top = 42, Width = 345, Height = 30, Minimum = 0, Maximum = 100, Value = 100, TickFrequency = 10, BackColor = CardBg };
-            lblVolumeValue = new Label() { Text = "100%", Font = new Font("Segoe UI", 9F, FontStyle.Bold), Left = 375, Top = 45, Width = 55, ForeColor = AccentCyan, TextAlign = ContentAlignment.MiddleRight };
+            trackVolume = new TrackBar() { Left = 15, Top = 42, Width = 365, Height = 30, Minimum = 0, Maximum = 100, Value = 100, TickFrequency = 10, BackColor = CardBg };
+            lblVolumeValue = new Label() { Text = "100%", Font = new Font("Segoe UI", 9F, FontStyle.Bold), Left = 390, Top = 45, Width = 60, ForeColor = AccentCyan, TextAlign = ContentAlignment.MiddleRight };
             trackVolume.Scroll += (s, e) => { lblVolumeValue.Text = trackVolume.Value + "%"; };
             pnlVolCard.Controls.Add(trackVolume);
             pnlVolCard.Controls.Add(lblVolumeValue);
 
-            // Speed Control Setting Card
             Panel pnlSpeedCard = CreateSettingCard(0, 110, "Speech Rate / Speed", "Controls how fast or slow the synthesis engine speaks.");
-            trackRate = new TrackBar() { Left = 15, Top = 42, Width = 345, Height = 30, Minimum = -10, Maximum = 10, Value = 0, TickFrequency = 2, BackColor = CardBg };
-            lblRateValue = new Label() { Text = "0", Font = new Font("Segoe UI", 9F, FontStyle.Bold), Left = 375, Top = 45, Width = 55, ForeColor = AccentCyan, TextAlign = ContentAlignment.MiddleRight };
+            trackRate = new TrackBar() { Left = 15, Top = 42, Width = 365, Height = 30, Minimum = -10, Maximum = 10, Value = 0, TickFrequency = 2, BackColor = CardBg };
+            lblRateValue = new Label() { Text = "0", Font = new Font("Segoe UI", 9F, FontStyle.Bold), Left = 390, Top = 45, Width = 60, ForeColor = AccentCyan, TextAlign = ContentAlignment.MiddleRight };
             trackRate.Scroll += (s, e) => { lblRateValue.Text = trackRate.Value.ToString(); };
             pnlSpeedCard.Controls.Add(trackRate);
             pnlSpeedCard.Controls.Add(lblRateValue);
@@ -209,12 +225,26 @@ namespace NoxTTS
             pnlSettingsTab.Controls.Add(pnlVolCard);
             pnlSettingsTab.Controls.Add(pnlSpeedCard);
 
-            // Populate system components
+            // Populate system components & devices
             LoadVoicesAndDevices();
 
             this.Controls.Add(pnlTitleBar);
             this.Controls.Add(pnlMainTab);
+            this.Controls.Add(pnlWebTab);
             this.Controls.Add(pnlSettingsTab);
+        }
+
+        private async void InitializeWebViewAsync()
+        {
+            try
+            {
+                await webView.EnsureCoreWebView2Async(null);
+                webView.CoreWebView2.Navigate("https://ttstool.com/");
+            }
+            catch
+            {
+                // Fallback if WebView2 runtime isn't pre-installed on the host machine
+            }
         }
 
         private Label CreateTabLabel(string text, int leftPos, bool active, Action onClick)
@@ -231,16 +261,24 @@ namespace NoxTTS
             return lbl;
         }
 
-        private void SwitchTab(bool isMainActive)
+        private void SwitchTab(int tabIndex)
         {
-            lblTabMain.Font = new Font("Segoe UI", 9F, isMainActive ? FontStyle.Bold : FontStyle.Regular);
-            lblTabMain.ForeColor = isMainActive ? TextPrimary : TextMuted;
+            bool isMain = (tabIndex == 0);
+            bool isWeb = (tabIndex == 1);
+            bool isSettings = (tabIndex == 2);
 
-            lblTabSettings.Font = new Font("Segoe UI", 9F, !isMainActive ? FontStyle.Bold : FontStyle.Regular);
-            lblTabSettings.ForeColor = !isMainActive ? TextPrimary : TextMuted;
+            lblTabMain.Font = new Font("Segoe UI", 9F, isMain ? FontStyle.Bold : FontStyle.Regular);
+            lblTabMain.ForeColor = isMain ? TextPrimary : TextMuted;
 
-            pnlMainTab.Visible = isMainActive;
-            pnlSettingsTab.Visible = !isMainActive;
+            lblTabWeb.Font = new Font("Segoe UI", 9F, isWeb ? FontStyle.Bold : FontStyle.Regular);
+            lblTabWeb.ForeColor = isWeb ? TextPrimary : TextMuted;
+
+            lblTabSettings.Font = new Font("Segoe UI", 9F, isSettings ? FontStyle.Bold : FontStyle.Regular);
+            lblTabSettings.ForeColor = isSettings ? TextPrimary : TextMuted;
+
+            pnlMainTab.Visible = isMain;
+            pnlWebTab.Visible = isWeb;
+            pnlSettingsTab.Visible = isSettings;
         }
 
         private ComboBox CreateStyledComboBox(int left, int top, int width)
@@ -257,10 +295,9 @@ namespace NoxTTS
 
         private Panel CreateSettingCard(int left, int top, string title, string description)
         {
-            var panel = new Panel() { Left = left, Top = top, Width = 448, Height = 88, BackColor = CardBg };
-            
+            var panel = new Panel() { Left = left, Top = top, Width = 468, Height = 88, BackColor = CardBg };
             var lblTitle = new Label() { Text = title, Font = new Font("Segoe UI", 9F, FontStyle.Bold), Left = 15, Top = 10, Width = 300, Height = 18, ForeColor = TextPrimary };
-            var lblDesc = new Label() { Text = description, Font = new Font("Segoe UI", 8F, FontStyle.Regular), Left = 15, Top = 26, Width = 415, Height = 18, ForeColor = TextMuted };
+            var lblDesc = new Label() { Text = description, Font = new Font("Segoe UI", 8F, FontStyle.Regular), Left = 15, Top = 26, Width = 435, Height = 18, ForeColor = TextMuted };
             
             panel.Controls.Add(lblTitle);
             panel.Controls.Add(lblDesc);
@@ -303,12 +340,17 @@ namespace NoxTTS
             {
                 var caps = WaveOut.GetCapabilities(i);
                 cmbDevices.Items.Add(caps.ProductName);
+                cmbWebDevices.Items.Add(caps.ProductName);
+
                 if (caps.ProductName.Contains("CABLE Input", StringComparison.OrdinalIgnoreCase))
                 {
                     cmbDevices.SelectedIndex = i;
+                    cmbWebDevices.SelectedIndex = i;
                 }
             }
+            
             if (cmbDevices.SelectedIndex == -1 && cmbDevices.Items.Count > 0) cmbDevices.SelectedIndex = 0;
+            if (cmbWebDevices.SelectedIndex == -1 && cmbWebDevices.Items.Count > 0) cmbWebDevices.SelectedIndex = 0;
         }
 
         private void TxtInput_KeyDown(object? sender, KeyEventArgs e)
